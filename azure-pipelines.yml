@@ -17,14 +17,9 @@ steps:
   displayName: 'Restore nugets'
   inputs:
     command: 'restore'
-    projects: '**/*.csproj'
     feedsToUse: 'select'
-- task: DotNetCoreCLI@2
+- script: dotnet build --configuration $(buildConfiguration)
   displayName: 'Build'
-  inputs:
-    command: 'build'
-    projects: '**/*.csproj'
-    arguments: '--configuration $(buildConfiguration)'
 - task: DotNetCoreCLI@2
   displayName: 'Run tests'
   inputs:
