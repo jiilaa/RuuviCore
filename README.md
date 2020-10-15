@@ -1,4 +1,5 @@
 # RuuviCore - a complete RuuviTag data processing system
+[![Build Status](https://dev.azure.com/jiilaa/RuuviCore/_apis/build/status/jiilaa.RuuviCore?branchName=main)](https://dev.azure.com/jiilaa/RuuviCore/_build/latest?definitionId=1&branchName=main)
 
 This project is a .NET Core implementation on Orleans framework, with a purpose to listen, collect and deliver measurements received from 
 RuuviTag (https://ruuvi.com/) environment sensors. Target platform is Linux (Raspberry Pi), 
