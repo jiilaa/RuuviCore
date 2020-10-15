@@ -1,0 +1,59 @@
+﻿@page "/taglist"
+
+@using System.Globalization
+@using net.jommy.RuuviCore.Interfaces
+@using net.jommy.RuuviCore.Services
+@inject IRuuviTagRepository RuuviTagRepository
+@inject NavigationManager NavigationManager
+
+<h1>RuuviTags currently in the system</h1>
+
+@if (_ruuviTags == null)
+{
+    <p><em>Loading...</em></p>
+}
+else
+{
+    <table class="table">
+        <thead>
+        <tr>
+            <th>ID</th>
+            <th>Name</th>
+            <th>Last communication time</th>
+            <th>Modification time</th>
+        </tr>
+        </thead>
+        <tbody>
+        @foreach (var ruuviTag in _ruuviTags)
+        {
+            <tr>
+                <td>@ruuviTag.MacAddress</td>
+                <td>@ruuviTag.Name</td>
+                <td>@ruuviTag.LastSeen</td>
+                <td>@ruuviTag.ModificationTime.ToString("yyyy-MM-dd HH:mm:ssZ", CultureInfo.InvariantCulture)</td>
+                <td><button class="btn btn-primary" @onclick="@(() => NavigateToEditor(ruuviTag.MacAddress))">Edit...</button></td>
+            </tr>
+        }
+        </tbody>
+    </table>
+}
+<button class="btn btn-primary" @onclick="AddNew">Add new...</button>
+
+@code {
+    private List<RuuviTagInfo> _ruuviTags;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _ruuviTags = await RuuviTagRepository.GetRuuviTagsAsync();
+    }
+    
+    private void AddNew()
+    {
+        NavigationManager.NavigateTo($"/edit/NewTag");
+    }
+
+    private void NavigateToEditor(string ruuviTagMacAddress)
+    {
+        NavigationManager.NavigateTo($"/edit/{ruuviTagMacAddress}");
+    }
+}
