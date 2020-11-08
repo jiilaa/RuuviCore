@@ -40,11 +40,17 @@ namespace net.jommy.RuuviCore
             Console.WriteLine($"Version: {Assembly.GetEntryAssembly()?.GetName().Version}");
             
             IHost siloHost;
+            var configuration = new ConfigurationBuilder()
+                .SetBasePath(AppDomain.CurrentDomain.BaseDirectory)
+                .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
+                .AddEnvironmentVariables() // Environment variables from e.g. docker can override the json values 
+                .Build();
+            var listeningSettings = configuration.GetSection("ListeningSettings").Get<ListeningSettings>();
 
-            if (args != null && args.Length > 0 && args.First() == "--http")
+            if (listeningSettings.HttpEnabled)
             {
                 Console.WriteLine("Starting RuuviCore with HTTP gateway...");
-                siloHost = BootstrapSiloWithHttpGateway();
+                siloHost = BootstrapSiloWithHttpGateway(listeningSettings);
             }
             else
             {
@@ -62,30 +68,30 @@ namespace net.jommy.RuuviCore
             }
         }
 
-        private static IHost BootstrapSiloWithHttpGateway()
+        private static IHost BootstrapSiloWithHttpGateway(ListeningSettings listeningSettings)
         {
             return Host.CreateDefaultBuilder()
                 .ConfigureAppConfiguration((hostingContext, config) =>
                 {
-                    config.AddJsonFile("appsettings.json", optional: true, reloadOnChange: true);
+                    config
+                        .AddJsonFile("appsettings.json", optional: true, reloadOnChange: true)
+                        .AddEnvironmentVariables();
                 })
                 .ConfigureWebHostDefaults(webBuilder =>
                 {
                     webBuilder.ConfigureKestrel((context, options) =>
                     {
-                        var configurationSection = context.Configuration.GetSection("ListeningSettings");
-                        if (UseHttps(configurationSection, out var port, out var certificateFile,
-                            out var certificateKey))
+                        if (listeningSettings.UseHttps)
                         {
-                            options.Listen(IPAddress.Any, port, listenOptions =>
+                            options.Listen(IPAddress.Any, listeningSettings.ListeningPort, listenOptions =>
                             {
                                 listenOptions.UseHttps(adapterOptions => adapterOptions.ServerCertificateSelector =
-                                    (connectionContext, s) => new X509Certificate2(certificateFile, certificateKey));
+                                    (connectionContext, s) => new X509Certificate2(listeningSettings.CertificateFile, listeningSettings.CertificateKey));
                             });
                         }
                         else
                         {
-                            options.Listen(IPAddress.Any, port);
+                            options.Listen(IPAddress.Any, listeningSettings.ListeningPort);
                         }
                     });
 
@@ -142,7 +148,7 @@ namespace net.jommy.RuuviCore
                 .ConfigureAppConfiguration((hostingContext, config) =>
                 {
                     config.AddJsonFile(
-                        "appsettings.core.json", optional: true, reloadOnChange: true);
+                        "appsettings.json", optional: true, reloadOnChange: true);
                 })
                 .UseOrleans(siloHostBuilder =>
                 {
