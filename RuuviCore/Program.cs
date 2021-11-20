@@ -108,6 +108,7 @@ namespace net.jommy.RuuviCore
                             options.LogWriteInterval = TimeSpan.FromHours(1);
                             options.PerfCountersWriteInterval = TimeSpan.FromDays(1);
                         })
+                        .Configure<FileStorageProviderOptions>(options => options.Directory = "RuuviTags")
                         .AddGrainService<DBusListener>()
                         .AddFileStorageGrainStorage(RuuviCoreConstants.GrainStorageName,
                             options => options.Directory = "RuuviTags")

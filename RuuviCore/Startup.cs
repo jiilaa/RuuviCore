@@ -1,3 +1,4 @@
+using Append.Blazor.Notifications;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
@@ -24,6 +25,7 @@ namespace net.jommy.RuuviCore
         {
             services.AddRazorPages();
             services.AddServerSideBlazor();
+            services.AddNotifications();
             services.AddSingleton<IRuuviTagRepository, RuuviTagRepository>();
             services.Configure<RestApiOptions>(Configuration.GetSection("APISettings"));
             services.Configure<DBusSettings>(Configuration.GetSection("DBusSettings"));

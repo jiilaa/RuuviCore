@@ -258,7 +258,16 @@ namespace net.jommy.RuuviCore.Grains
 
         private static bool TryParseMeasurements(byte[] data, bool discardInvalidValues, out Measurements measurements)
         {
-            return DataParserFactory.GetParser(data).TryParseMeasurements(data, discardInvalidValues, out measurements);
+            try
+            {
+                return DataParserFactory.GetParser(data).TryParseMeasurements(data, discardInvalidValues, out measurements);
+            }
+            catch (Exception e)
+            {
+                Log.Error("Failed to parse measurements: {errorMessage}", e.Message);
+                measurements = null;
+                return false;
+            }
         }
 
         private string GetIdentity()
@@ -367,7 +376,6 @@ namespace net.jommy.RuuviCore.Grains
         {
             var dirty = false;
             var updateRegistry = ruuviTag.Name != _ruuviTagState.State.Name;
-            var dashboardSettingChanged = ruuviTag.IncludeInDashboard != _ruuviTagState.State.InDashboard;
 
             if (!_ruuviTagState.State.Initialized)
             {
@@ -423,6 +431,13 @@ namespace net.jommy.RuuviCore.Grains
                 dirty = true;
                 _ruuviTagState.State.InDashboard = ruuviTag.IncludeInDashboard;
             }
+
+            if (ruuviTag.AlertRules.Count != _ruuviTagState.State.AlertRules.Count ||
+                !ruuviTag.AlertRules.Any(AlertRuleDiffers))
+            {
+                dirty = true;
+                _ruuviTagState.State.AlertRules = ruuviTag.AlertRules;
+            }
             
             if (dirty)
             {
@@ -432,6 +447,16 @@ namespace net.jommy.RuuviCore.Grains
                     await GrainFactory.GetGrain<IRuuviTagRegistry>(0).AddOrUpdate(_ruuviTagState.State.MacAddress, _ruuviTagState.State.Name);
                 }
             }
+        }
+
+        private bool AlertRuleDiffers(KeyValuePair<string, AlertThresholds> newRules)
+        {
+            if (_ruuviTagState.State.AlertRules.TryGetValue(newRules.Key, out var value))
+            {
+                return value.MinValidValue != newRules.Value.MinValidValue || value.MaxValidValue != newRules.Value.MaxValidValue;
+            }
+
+            return true;
         }
     }
 }
