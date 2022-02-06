@@ -50,7 +50,7 @@ namespace net.jommy.RuuviCore.Grains
                 }
             }
 
-            var streamProvider = GetStreamProvider("SimpleStreamProvider");
+            var streamProvider = GetStreamProvider(RuuviCoreConstants.StreamProviderName);
             var stream = streamProvider.GetStream<MeasurementEnvelope>(this.GetPrimaryKey(), "MeasurementStream");
             await stream.SubscribeAsync(this);
         }

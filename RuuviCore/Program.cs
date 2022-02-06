@@ -19,6 +19,7 @@ using Serilog;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Logging;
 using Orleans.Configuration;
+using Orleans.Providers;
 using Orleans.Runtime.Configuration;
 
 namespace net.jommy.RuuviCore
@@ -41,15 +42,15 @@ namespace net.jommy.RuuviCore
             
             IHost siloHost;
 
-            if (args != null && args.Length > 0 && args.First() == "--http")
+            if (args != null && args.Length > 0 && args.Contains("--http"))
             {
                 Console.WriteLine("Starting RuuviCore with HTTP gateway...");
-                siloHost = BootstrapSiloWithHttpGateway();
+                siloHost = BootstrapSiloWithHttpGateway(args.Contains("--simplestream"));
             }
             else
             {
                 Console.WriteLine("Starting RuuviCore...");
-                siloHost = CreateSilo();
+                siloHost = CreateSilo(args.Contains("--simplestream"));
             }
 
             try
@@ -62,7 +63,7 @@ namespace net.jommy.RuuviCore
             }
         }
 
-        private static IHost BootstrapSiloWithHttpGateway()
+        private static IHost BootstrapSiloWithHttpGateway(bool useSimpleStream)
         {
             return Host.CreateDefaultBuilder()
                 .ConfigureAppConfiguration((hostingContext, config) =>
@@ -112,8 +113,15 @@ namespace net.jommy.RuuviCore
                         .AddGrainService<DBusListener>()
                         .AddFileStorageGrainStorage(RuuviCoreConstants.GrainStorageName,
                             options => options.Directory = "RuuviTags")
-                        .AddMemoryGrainStorage("PubSubStore")
-                        .AddSimpleMessageStreamProvider("SimpleStreamProvider");
+                        .AddMemoryGrainStorage("PubSubStore");
+                    if (useSimpleStream)
+                    {
+                        siloHostBuilder.AddSimpleMessageStreamProvider(RuuviCoreConstants.StreamProviderName);
+                    }
+                    else
+                    {
+                        siloHostBuilder.AddMemoryStreams<DefaultMemoryMessageBodySerializer>(RuuviCoreConstants.StreamProviderName);
+                    }
                 })
                 .ConfigureLogging(builder =>
                 {
@@ -133,7 +141,7 @@ namespace net.jommy.RuuviCore
                 .Build();
         }
 
-        private static IHost CreateSilo()
+        private static IHost CreateSilo(bool useSimpleStream)
         {
             var configuration = new ConfigurationBuilder()
                 .SetBasePath(AppDomain.CurrentDomain.BaseDirectory)
@@ -160,9 +168,16 @@ namespace net.jommy.RuuviCore
                             services.Configure<InfluxSettings>(configuration.GetSection("InfluxSettings"));
                         })
                         .AddGrainService<DBusListener>()
-                        .AddFileStorageGrainStorage("RuuviStorage", options => options.Directory = "RuuviTags")
-                        .AddMemoryGrainStorage("PubSubStore")
-                        .AddSimpleMessageStreamProvider("SimpleStreamProvider");
+                        .AddFileStorageGrainStorage(RuuviCoreConstants.GrainStorageName, options => options.Directory = "RuuviTags")
+                        .AddMemoryGrainStorage("PubSubStore");
+                    if (useSimpleStream)
+                    {
+                        siloHostBuilder.AddSimpleMessageStreamProvider(RuuviCoreConstants.StreamProviderName);
+                    }
+                    else
+                    {
+                        siloHostBuilder.AddMemoryStreams<DefaultMemoryMessageBodySerializer>(RuuviCoreConstants.StreamProviderName);
+                    }
                 })
                 .ConfigureLogging(builder =>
                 {
