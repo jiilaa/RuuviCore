@@ -25,6 +25,7 @@ namespace net.jommy.RuuviCore.GrainServices
 
         protected override async Task HandlePropertiesChanged(byte[] manufacturerData)
         {
+            _logger.LogInformation("Publishing ruuvi data to ruuvi actor {MAC}", DeviceAddress);
             await GrainFactory.GetGrain<IRuuviStreamWorker>(0).Publish(
                 DeviceAddress,
                 new MeasurementEnvelope

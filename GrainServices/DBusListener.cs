@@ -31,7 +31,8 @@ namespace net.jommy.RuuviCore.GrainServices
         private readonly DeviceListenerFactory _deviceListenerFactory;
         private readonly ILogger<DBusListener> _logger;
 
-        public DBusListener(IGrainIdentity grainId, Silo silo, ILoggerFactory loggerFactory, IGrainFactory grainFactory, IOptions<DBusSettings> dbusOptions) : base(grainId, silo, loggerFactory)
+        public DBusListener(IGrainIdentity grainId, Silo silo, ILoggerFactory loggerFactory, IGrainFactory grainFactory, IOptions<DBusSettings> dbusOptions) 
+            : base(grainId, silo, loggerFactory)
         {
             _dbusSettings = dbusOptions.Value;
             _deviceListenerFactory = new DeviceListenerFactory(grainFactory, loggerFactory);
@@ -141,7 +142,7 @@ namespace net.jommy.RuuviCore.GrainServices
                 // It seems sometimes devices are found again, so let's dispose old observers so DBUS limits will not get exceeded.
                 if (_deviceListeners.Remove(address, out var oldListener))
                 {
-                    _logger.LogDebug("Disposing old observer.", address);
+                    _logger.LogInformation("Disposing old observer with address {address}.", address);
                     oldListener.Dispose();
                 }
 
@@ -152,7 +153,7 @@ namespace net.jommy.RuuviCore.GrainServices
                 }
                 else
                 {
-                    _logger.LogDebug("Unsupported manufacturer, ignoring.");
+                    _logger.LogInformation("Unsupported manufacturer, ignoring: {data}.", manufacturerData);
                 }
             }
             else

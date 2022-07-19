@@ -28,8 +28,6 @@ namespace net.jommy.RuuviCore
             services.AddNotifications();
             services.AddSingleton<IRuuviTagRepository, RuuviTagRepository>();
             services.Configure<RestApiOptions>(Configuration.GetSection("APISettings"));
-            services.Configure<DBusSettings>(Configuration.GetSection("DBusSettings"));
-            services.Configure<InfluxSettings>(Configuration.GetSection("InfluxSettings"));            
             services
                 .AddControllers()
                 .AddJsonOptions(options =>

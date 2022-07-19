@@ -52,15 +52,10 @@
 
 
 @functions{
-    private bool isSupportedByBrowser;
+    private bool isSupportedByBrowser = true;
     private string title = "My Dummy Title";
     private string body = "Lorem ipsum dolor sit ...";
     private string icon = "images/github.png";
-
-    protected override async Task OnInitializedAsync()
-    {
-        isSupportedByBrowser = await NotificationService.IsSupportedByBrowserAsync();
-    }
 
     private async Task CreateNotificationAsync()
     {

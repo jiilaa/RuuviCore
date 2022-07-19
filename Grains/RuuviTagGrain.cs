@@ -9,6 +9,7 @@ using Microsoft.Azure.Devices.Client;
 using Microsoft.Azure.Devices.Provisioning.Client;
 using Microsoft.Azure.Devices.Provisioning.Client.Transport;
 using Microsoft.Azure.Devices.Shared;
+using Microsoft.Extensions.Logging;
 using net.jommy.RuuviCore.Common;
 using net.jommy.RuuviCore.Grains.DataParsers;
 using net.jommy.RuuviCore.Interfaces;
@@ -23,29 +24,28 @@ namespace net.jommy.RuuviCore.Grains
     public class RuuviTagGrain : Grain, IRuuviTag, IAsyncObserver<MeasurementEnvelope>
     {
         private readonly IPersistentState<RuuviTagState> _ruuviTagState;
+        private readonly ILogger<RuuviTagGrain> _logger;
         private const string GlobalDeviceEndpoint = "global.azure-devices-provisioning.net";
         private DeviceClient _azureClient;
         private DateTime _lastPushTime = DateTime.MinValue;
 
         public RuuviTagGrain(
             [PersistentState(nameof(RuuviTagState), "RuuviStorage")]
-            IPersistentState<RuuviTagState> ruuviTagState)
+            IPersistentState<RuuviTagState> ruuviTagState,
+            ILogger<RuuviTagGrain> logger)
         {
             _ruuviTagState = ruuviTagState;
+            _logger = logger;
         }
 
         public override async Task OnActivateAsync()
         {
-            Log.Logger = new LoggerConfiguration()
-                .WriteTo.Console()
-                .CreateLogger();
-
             if (_ruuviTagState.State.UseAzure)
             {
                 _azureClient = await ConnectToAzureIoT();
                 if (_azureClient == null)
                 {
-                    Log.Error("Could not initialize the connection to Azure IoT. Disabling the connection.");
+                    _logger.LogError("Could not initialize the connection to Azure IoT. Disabling the connection.");
                     _ruuviTagState.State.UseAzure = false;
                 }
             }
@@ -105,6 +105,8 @@ namespace net.jommy.RuuviCore.Grains
 
         public async Task StoreMeasurementData(Measurements measurements)
         {
+            _logger.LogInformation("{Identity}: Received measurements with timestamp {timestamp} and sequence number {sequenceNumber}", GetIdentity(), measurements.Timestamp, measurements.SequenceNumber);
+
             // We are no longer interested if older values have already been pushed.
             if (measurements.Timestamp < _lastPushTime)
             {
@@ -126,7 +128,7 @@ namespace net.jommy.RuuviCore.Grains
                 var pushedSuccessfully = await PushData(measurements);
                 if (pushedSuccessfully)
                 {
-                    Log.Debug("{Identity}: Measurements sent successfully.", GetIdentity());
+                    _logger.LogDebug("{Identity}: Measurements sent successfully.", GetIdentity());
                     if (_ruuviTagState.State.CalculateAverages)
                     {
                         _ruuviTagState.State.LatestMeasurements.Clear();
@@ -135,7 +137,7 @@ namespace net.jommy.RuuviCore.Grains
                 }
                 else
                 {
-                    Log.Warning("{Identity}: There was a problem sending the measurements.", GetIdentity());
+                    _logger.LogWarning("{Identity}: There was a problem sending the measurements.", GetIdentity());
                 }
             }
         }
@@ -145,7 +147,7 @@ namespace net.jommy.RuuviCore.Grains
             var valid = TryParseMeasurements(data, _ruuviTagState.State.DiscardMinMaxValues, out var measurements);
             if (!valid)
             {
-                Log.Error("{Identity}: Discarding packet data with invalid values.", GetIdentity());
+                _logger.LogError("{Identity}: Discarding packet data with invalid values.", GetIdentity());
                 return;
             }
             measurements.Timestamp = timeStamp;
@@ -159,7 +161,7 @@ namespace net.jommy.RuuviCore.Grains
             // TODO: Implement logic to push old data too if influxDB hasn't been reachable during the last attempt.
             measurements = _ruuviTagState.State.CalculateAverages ? CalculateAverageMeasurements() : measurements;
 
-            Log.Information("{Identity}: Pushing measurements to InfluxBridge: {measurements}", GetIdentity(), measurements);
+            _logger.LogInformation("{Identity}: Pushing measurements to InfluxBridge: {measurements}", GetIdentity(), measurements);
 
             var result = await GrainFactory.GetGrain<IInfluxBridge>(0)
                 .WriteMeasurements(_ruuviTagState.State.MacAddress, _ruuviTagState.State.StoreName ? _ruuviTagState.State.Name : null, measurements);
@@ -256,7 +258,7 @@ namespace net.jommy.RuuviCore.Grains
             _ruuviTagState.State.LatestMeasurements.Add(measurements);
         }
 
-        private static bool TryParseMeasurements(byte[] data, bool discardInvalidValues, out Measurements measurements)
+        private bool TryParseMeasurements(byte[] data, bool discardInvalidValues, out Measurements measurements)
         {
             try
             {
@@ -264,7 +266,7 @@ namespace net.jommy.RuuviCore.Grains
             }
             catch (Exception e)
             {
-                Log.Error("Failed to parse measurements: {errorMessage}", e.Message);
+                _logger.LogError("Failed to parse measurements: {errorMessage}", e.Message);
                 measurements = null;
                 return false;
             }
@@ -338,11 +340,12 @@ namespace net.jommy.RuuviCore.Grains
         {
             if (!_ruuviTagState.State.Initialized)
             {
-                Log.Warning("An uninitialized RuuviTag {macAddress} receiving data with signal strength {signalStrength}. (Ignoring packet)", 
+                _logger.LogWarning("An uninitialized RuuviTag {macAddress} receiving data with signal strength {signalStrength}. (Ignoring packet)", 
                     measurementEnvelope.MacAddress,
                     measurementEnvelope.SignalStrength);
                 return;
             }
+            
             await StoreMeasurementData(measurementEnvelope.Timestamp, measurementEnvelope.SignalStrength, measurementEnvelope.Data);
             await GrainFactory.GetGrain<IRuuviTagRegistry>(0).Refresh(_ruuviTagState.State.MacAddress, measurementEnvelope.Timestamp);
         }
@@ -354,7 +357,7 @@ namespace net.jommy.RuuviCore.Grains
 
         public Task OnErrorAsync(Exception ex)
         {
-            Log.Error(ex, "{ruuviTag} | Stream error.", _ruuviTagState.State.Name ?? _ruuviTagState.State.MacAddress);
+            _logger.LogError(ex, "{ruuviTag} | Stream error.", _ruuviTagState.State.Name ?? _ruuviTagState.State.MacAddress);
             return Task.CompletedTask;
         }
 
@@ -432,8 +435,9 @@ namespace net.jommy.RuuviCore.Grains
                 _ruuviTagState.State.InDashboard = ruuviTag.IncludeInDashboard;
             }
 
-            if (ruuviTag.AlertRules.Count != _ruuviTagState.State.AlertRules.Count ||
-                !ruuviTag.AlertRules.Any(AlertRuleDiffers))
+            if (ruuviTag.AlertRules != null && (ruuviTag.AlertRules == null || 
+                ruuviTag.AlertRules.Count != _ruuviTagState.State.AlertRules.Count ||
+                 !ruuviTag.AlertRules.Any(AlertRuleDiffers)))
             {
                 dirty = true;
                 _ruuviTagState.State.AlertRules = ruuviTag.AlertRules;
