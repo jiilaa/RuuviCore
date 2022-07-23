@@ -9,6 +9,10 @@
         public string InfluxDatabase { get; set; }
         public string InfluxMeasurementTable { get; set; }
 
+        public string Username { get; set; }
+        
+        public string Password { get; set; }
+        
         public InfluxSettings()
         {
             InfluxAddress = DefaultInfluxAddress;

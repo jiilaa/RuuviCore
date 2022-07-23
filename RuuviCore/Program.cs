@@ -21,6 +21,7 @@ using Microsoft.Extensions.Logging;
 using Orleans.Configuration;
 using Orleans.Providers;
 using Orleans.Runtime.Configuration;
+using Serilog.Events;
 
 namespace net.jommy.RuuviCore
 {
@@ -69,7 +70,12 @@ namespace net.jommy.RuuviCore
                 })
                 .UseSerilog((context, loggerConfiguration) =>
                 {
-                    loggerConfiguration.WriteTo.Console();
+                    loggerConfiguration
+                        .WriteTo.Console()
+                        .MinimumLevel.Information()
+                        .MinimumLevel.Override("Orleans", LogEventLevel.Error)
+                        .MinimumLevel.Override("Microsoft.Orleans", LogEventLevel.Error)
+                        .MinimumLevel.Override("Microsoft.AspNetCore.Hosting.Diagnostics", LogEventLevel.Error);
                 })
                 .UseOrleans(siloHostBuilder => ConfigureOrleans(siloHostBuilder, useSimpleStream, configuration))
                 .ConfigureLogging(ConfigureLogging())
@@ -137,7 +143,11 @@ namespace net.jommy.RuuviCore
             }
             else
             {
-                siloHostBuilder.AddMemoryStreams<DefaultMemoryMessageBodySerializer>(RuuviCoreConstants.StreamProviderName);
+                siloHostBuilder.AddMemoryStreams<DefaultMemoryMessageBodySerializer>(RuuviCoreConstants.StreamProviderName,
+                    configurator =>
+                    {
+                        configurator.ConfigurePartitioning(numOfQueues: 2);
+                    });
             }
         }
 

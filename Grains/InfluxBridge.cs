@@ -3,10 +3,12 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using InfluxDB.Collector;
 using InfluxDB.Collector.Diagnostics;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+using net.jommy.RuuviCore.Common;
 using net.jommy.RuuviCore.Interfaces;
 using Orleans;
 using Orleans.Concurrency;
-using Serilog;
 
 namespace net.jommy.RuuviCore.Grains
 {
@@ -14,23 +16,24 @@ namespace net.jommy.RuuviCore.Grains
     public class InfluxBridge : Grain, IInfluxBridge
     {
         private MetricsCollector _metricsCollector;
+        private readonly InfluxSettings _influxSettings;
+        private readonly ILogger<InfluxBridge> _logger;
 
-        public InfluxBridge()
+        public InfluxBridge(IOptions<InfluxSettings> influxOptions, ILogger<InfluxBridge> logger)
         {
-            Log.Logger = new LoggerConfiguration()
-                .WriteTo.Console()
-                .CreateLogger();
+            _influxSettings = influxOptions.Value;
+            _logger = logger;
         }
 
         public override Task OnActivateAsync()
         {
             _metricsCollector = new CollectorConfiguration()
                 .Batch.AtInterval(TimeSpan.FromSeconds(2))
-                .WriteTo.InfluxDB("http://localhost:8086", "ruuvidata")
+                .WriteTo.InfluxDB(_influxSettings.InfluxAddress, _influxSettings.InfluxDatabase, _influxSettings.Username, _influxSettings.Password)
                 .CreateCollector();
             CollectorLog.RegisterErrorHandler((message, exception) =>
             {
-                Log.Error(exception, message);
+                _logger.LogError(exception, "Error when activating bridge to influx: {errorMessage}", message);
             });
             
             return base.OnActivateAsync();
@@ -45,7 +48,7 @@ namespace net.jommy.RuuviCore.Grains
                 {
                     tags["name"] = name;
                 }
-                _metricsCollector.Write("measurements", new Dictionary<string, object>
+                _metricsCollector.Write(_influxSettings.InfluxMeasurementTable, new Dictionary<string, object>
                 {
                     {"Temperature", measurements.Temperature},
                     {"Humidity", measurements.Humidity},
@@ -56,7 +59,7 @@ namespace net.jommy.RuuviCore.Grains
             }
             catch (Exception e)
             {
-                Log.Error(e, "Error saving data to InfluxDB: {errorMessage}.", e.Message);
+                _logger.LogError(e, "Error saving data to InfluxDB: {errorMessage}.", e.Message);
                 return Task.FromResult(false);
             }
 

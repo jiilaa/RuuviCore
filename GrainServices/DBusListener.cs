@@ -92,8 +92,8 @@ namespace net.jommy.RuuviCore.GrainServices
             }
             catch (Exception e)
             {
-                _logger.LogWarning(e, "DBUS error: {errorMessage}", e.Message);
-                _logger.LogInformation("Ruuvi DBUS Listener NOT listening for bluetooth events.");
+                _logger.LogError(e, "DBUS error: {errorMessage}", e.Message);
+                _logger.LogError("Ruuvi DBUS Listener NOT listening for bluetooth events.");
             }
         }
 
@@ -112,7 +112,7 @@ namespace net.jommy.RuuviCore.GrainServices
             }
             catch (Exception e)
             {
-                _logger.LogWarning(e, "Error occurred when discovering a device: {errorMessage}.", e.Message);
+                _logger.LogError(e, "Error occurred when discovering a device: {errorMessage}.", e.Message);
             }
         }
 
@@ -139,17 +139,27 @@ namespace net.jommy.RuuviCore.GrainServices
             if (manufacturerData != null)
             {
                 var address = await device.GetAddressAsync();
-                // It seems sometimes devices are found again, so let's dispose old observers so DBUS limits will not get exceeded.
-                if (_deviceListeners.Remove(address, out var oldListener))
-                {
-                    _logger.LogInformation("Disposing old observer with address {address}.", address);
-                    oldListener.Dispose();
-                }
 
+                if (_deviceListeners.TryGetValue(address, out var existingListener))
+                {
+                    if (existingListener.IsAlive())
+                    {
+                        _logger.LogDebug("Using old device listener with address {address} to handle manufacturer data.", address);
+                        await existingListener.HandleDataAsync(manufacturerData);
+                        return;
+                    }
+
+                    // Devices are found again with certain interval. If old listener hasn't had data for a while, let's dispose it and start a new one.
+                    _logger.LogInformation("Disposing old device listener with address {address}.", address);
+                    _deviceListeners.Remove(address);
+                    existingListener.Dispose();
+                }
+                
                 if (_deviceListenerFactory.TryConstructDeviceListener(device, address, manufacturerData, out var deviceListener))
                 {
                     _deviceListeners[address] = deviceListener;
                     await deviceListener.StartListeningAsync();
+                    await deviceListener.HandleDataAsync(manufacturerData);
                 }
                 else
                 {

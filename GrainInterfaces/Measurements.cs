@@ -27,7 +27,11 @@ namespace net.jommy.RuuviCore.Interfaces
 
         public override string ToString()
         {
-            return $"[#{SequenceNumber} @ Timestamp:{Timestamp}. Humidity:{Humidity}, Temperature:{Temperature}, Pressure:{Pressure}, BatteryVoltage:{BatteryVoltage}, Acceleration:{Acceleration}, RSSI:{RSSI}, TX Power:{TransmissionPower}, MovementCounter:{MovementCounter}";
+            if (Acceleration != null)
+            {
+                return $"[#{SequenceNumber} @ {Timestamp}. Humidity:{Humidity}, Temperature:{Temperature}, Pressure:{Pressure}, Battery:{BatteryVoltage}, Acceleration:{Acceleration}, RSSI:{RSSI}, Movement:{MovementCounter}";
+            }
+            return $"[#{SequenceNumber} @ {Timestamp}. Humidity:{Humidity}, Temperature:{Temperature}, Pressure:{Pressure}, Battery:{BatteryVoltage}, RSSI:{RSSI}, Movement:{MovementCounter}";
         }
     }
 }

@@ -30,7 +30,7 @@ namespace net.jommy.RuuviCore.Grains
         private DateTime _lastPushTime = DateTime.MinValue;
 
         public RuuviTagGrain(
-            [PersistentState(nameof(RuuviTagState), "RuuviStorage")]
+            [PersistentState(nameof(RuuviTagState), RuuviCoreConstants.GrainStorageName)]
             IPersistentState<RuuviTagState> ruuviTagState,
             ILogger<RuuviTagGrain> logger)
         {
@@ -53,6 +53,13 @@ namespace net.jommy.RuuviCore.Grains
             var streamProvider = GetStreamProvider(RuuviCoreConstants.StreamProviderName);
             var stream = streamProvider.GetStream<MeasurementEnvelope>(this.GetPrimaryKey(), "MeasurementStream");
             await stream.SubscribeAsync(this);
+        }
+
+        public override async Task OnDeactivateAsync()
+        {
+            // Lazy attempt to save the latest signal strength, doesn't matter too much if it fails.
+            // Everything else is saved when data is changed
+            await _ruuviTagState.WriteStateAsync();
         }
 
         public async Task Initialize(string macAddress, string name, DataSavingOptions dataSavingOptions)
@@ -105,7 +112,7 @@ namespace net.jommy.RuuviCore.Grains
 
         public async Task StoreMeasurementData(Measurements measurements)
         {
-            _logger.LogInformation("{Identity}: Received measurements with timestamp {timestamp} and sequence number {sequenceNumber}", GetIdentity(), measurements.Timestamp, measurements.SequenceNumber);
+            _logger.LogDebug("{Identity}: Received measurements with timestamp {timestamp} and sequence number {sequenceNumber}", GetIdentity(), measurements.Timestamp, measurements.SequenceNumber);
 
             // We are no longer interested if older values have already been pushed.
             if (measurements.Timestamp < _lastPushTime)
@@ -125,7 +132,7 @@ namespace net.jommy.RuuviCore.Grains
             }
             if (TimeSpan.FromSeconds(_ruuviTagState.State.DataSavingInterval) <= (measurements.Timestamp - _lastPushTime))
             {
-                var pushedSuccessfully = await PushData(measurements);
+                var pushedSuccessfully = await PushDataAsync(measurements);
                 if (pushedSuccessfully)
                 {
                     _logger.LogDebug("{Identity}: Measurements sent successfully.", GetIdentity());
@@ -142,7 +149,7 @@ namespace net.jommy.RuuviCore.Grains
             }
         }
 
-        private async Task StoreMeasurementData(DateTime timeStamp, short signalStrength, byte[] data)
+        private async Task StoreMeasurementDataAsync(DateTime timeStamp, short signalStrength, byte[] data)
         {
             var valid = TryParseMeasurements(data, _ruuviTagState.State.DiscardMinMaxValues, out var measurements);
             if (!valid)
@@ -156,12 +163,12 @@ namespace net.jommy.RuuviCore.Grains
             await StoreMeasurementData(measurements);
         }
 
-        private async Task<bool> PushData(Measurements measurements)
+        private async Task<bool> PushDataAsync(Measurements measurements)
         {
             // TODO: Implement logic to push old data too if influxDB hasn't been reachable during the last attempt.
             measurements = _ruuviTagState.State.CalculateAverages ? CalculateAverageMeasurements() : measurements;
 
-            _logger.LogInformation("{Identity}: Pushing measurements to InfluxBridge: {measurements}", GetIdentity(), measurements);
+            _logger.LogInformation("{Identity}: Saving measurements: {measurements}", GetIdentity(), measurements);
 
             var result = await GrainFactory.GetGrain<IInfluxBridge>(0)
                 .WriteMeasurements(_ruuviTagState.State.MacAddress, _ruuviTagState.State.StoreName ? _ruuviTagState.State.Name : null, measurements);
@@ -281,13 +288,13 @@ namespace net.jommy.RuuviCore.Grains
 
         private async Task<DeviceClient> ConnectToAzureIoT()
         {
-            Log.Information("Connecting {identity} to Azure IoT.", GetIdentity());
+            _logger.LogInformation("Connecting {identity} to Azure IoT.", GetIdentity());
             using var security =
                 new SecurityProviderSymmetricKey(this.GetPrimaryKeyString(), _ruuviTagState.State.AzurePrimaryKey, null);
             var result = await RegisterDevice(security);
             if (result.Status != ProvisioningRegistrationStatusType.Assigned)
             {
-                Log.Error("Failed to register device {identity} to Azure IoT.", GetIdentity());
+                _logger.LogError("Failed to register device {identity} to Azure IoT.", GetIdentity());
                 return null;
             }
 
@@ -305,7 +312,7 @@ namespace net.jommy.RuuviCore.Grains
 
             var result = await provClient.RegisterAsync();
 
-            Log.Information("Registration result: {result}.", result.Status);
+            _logger.LogInformation("Registration result: {result}.", result.Status);
             return result;
         }
 
@@ -320,7 +327,7 @@ namespace net.jommy.RuuviCore.Grains
                     _ruuviTagState.State.UseAzure = false;
                 }
             }
-            Log.Information("{Identity}: Sending measurements to Azure IoT.", GetIdentity());
+            _logger.LogInformation("{Identity}: Sending measurements to Azure IoT.", GetIdentity());
 
             var telemetryDataPoint = new
             {
@@ -345,8 +352,10 @@ namespace net.jommy.RuuviCore.Grains
                     measurementEnvelope.SignalStrength);
                 return;
             }
+
+            _ruuviTagState.State.SignalStrength = measurementEnvelope.SignalStrength.GetValueOrDefault(_ruuviTagState.State.SignalStrength);
             
-            await StoreMeasurementData(measurementEnvelope.Timestamp, measurementEnvelope.SignalStrength, measurementEnvelope.Data);
+            await StoreMeasurementDataAsync(measurementEnvelope.Timestamp, _ruuviTagState.State.SignalStrength, measurementEnvelope.Data);
             await GrainFactory.GetGrain<IRuuviTagRegistry>(0).Refresh(_ruuviTagState.State.MacAddress, measurementEnvelope.Timestamp);
         }
 
