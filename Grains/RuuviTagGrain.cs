@@ -9,6 +9,7 @@ using Microsoft.Azure.Devices.Client;
 using Microsoft.Azure.Devices.Provisioning.Client;
 using Microsoft.Azure.Devices.Provisioning.Client.Transport;
 using Microsoft.Azure.Devices.Shared;
+using Microsoft.Extensions.Logging;
 using net.jommy.RuuviCore.Common;
 using net.jommy.RuuviCore.Grains.DataParsers;
 using net.jommy.RuuviCore.Interfaces;
@@ -23,36 +24,42 @@ namespace net.jommy.RuuviCore.Grains
     public class RuuviTagGrain : Grain, IRuuviTag, IAsyncObserver<MeasurementEnvelope>
     {
         private readonly IPersistentState<RuuviTagState> _ruuviTagState;
+        private readonly ILogger<RuuviTagGrain> _logger;
         private const string GlobalDeviceEndpoint = "global.azure-devices-provisioning.net";
         private DeviceClient _azureClient;
         private DateTime _lastPushTime = DateTime.MinValue;
 
         public RuuviTagGrain(
-            [PersistentState(nameof(RuuviTagState), "RuuviStorage")]
-            IPersistentState<RuuviTagState> ruuviTagState)
+            [PersistentState(nameof(RuuviTagState), RuuviCoreConstants.GrainStorageName)]
+            IPersistentState<RuuviTagState> ruuviTagState,
+            ILogger<RuuviTagGrain> logger)
         {
             _ruuviTagState = ruuviTagState;
+            _logger = logger;
         }
 
         public override async Task OnActivateAsync()
         {
-            Log.Logger = new LoggerConfiguration()
-                .WriteTo.Console()
-                .CreateLogger();
-
             if (_ruuviTagState.State.UseAzure)
             {
                 _azureClient = await ConnectToAzureIoT();
                 if (_azureClient == null)
                 {
-                    Log.Error("Could not initialize the connection to Azure IoT. Disabling the connection.");
+                    _logger.LogError("Could not initialize the connection to Azure IoT. Disabling the connection.");
                     _ruuviTagState.State.UseAzure = false;
                 }
             }
 
-            var streamProvider = GetStreamProvider("SimpleStreamProvider");
+            var streamProvider = GetStreamProvider(RuuviCoreConstants.StreamProviderName);
             var stream = streamProvider.GetStream<MeasurementEnvelope>(this.GetPrimaryKey(), "MeasurementStream");
             await stream.SubscribeAsync(this);
+        }
+
+        public override async Task OnDeactivateAsync()
+        {
+            // Lazy attempt to save the latest signal strength, doesn't matter too much if it fails.
+            // Everything else is saved when data is changed
+            await _ruuviTagState.WriteStateAsync();
         }
 
         public async Task Initialize(string macAddress, string name, DataSavingOptions dataSavingOptions)
@@ -105,6 +112,8 @@ namespace net.jommy.RuuviCore.Grains
 
         public async Task StoreMeasurementData(Measurements measurements)
         {
+            _logger.LogDebug("{Identity}: Received measurements with timestamp {timestamp} and sequence number {sequenceNumber}", GetIdentity(), measurements.Timestamp, measurements.SequenceNumber);
+
             // We are no longer interested if older values have already been pushed.
             if (measurements.Timestamp < _lastPushTime)
             {
@@ -123,10 +132,10 @@ namespace net.jommy.RuuviCore.Grains
             }
             if (TimeSpan.FromSeconds(_ruuviTagState.State.DataSavingInterval) <= (measurements.Timestamp - _lastPushTime))
             {
-                var pushedSuccessfully = await PushData(measurements);
+                var pushedSuccessfully = await PushDataAsync(measurements);
                 if (pushedSuccessfully)
                 {
-                    Log.Debug("{Identity}: Measurements sent successfully.", GetIdentity());
+                    _logger.LogDebug("{Identity}: Measurements sent successfully.", GetIdentity());
                     if (_ruuviTagState.State.CalculateAverages)
                     {
                         _ruuviTagState.State.LatestMeasurements.Clear();
@@ -135,17 +144,17 @@ namespace net.jommy.RuuviCore.Grains
                 }
                 else
                 {
-                    Log.Warning("{Identity}: There was a problem sending the measurements.", GetIdentity());
+                    _logger.LogWarning("{Identity}: There was a problem sending the measurements.", GetIdentity());
                 }
             }
         }
 
-        private async Task StoreMeasurementData(DateTime timeStamp, short signalStrength, byte[] data)
+        private async Task StoreMeasurementDataAsync(DateTime timeStamp, short signalStrength, byte[] data)
         {
             var valid = TryParseMeasurements(data, _ruuviTagState.State.DiscardMinMaxValues, out var measurements);
             if (!valid)
             {
-                Log.Error("{Identity}: Discarding packet data with invalid values.", GetIdentity());
+                _logger.LogError("{Identity}: Discarding packet data with invalid values.", GetIdentity());
                 return;
             }
             measurements.Timestamp = timeStamp;
@@ -154,12 +163,12 @@ namespace net.jommy.RuuviCore.Grains
             await StoreMeasurementData(measurements);
         }
 
-        private async Task<bool> PushData(Measurements measurements)
+        private async Task<bool> PushDataAsync(Measurements measurements)
         {
             // TODO: Implement logic to push old data too if influxDB hasn't been reachable during the last attempt.
             measurements = _ruuviTagState.State.CalculateAverages ? CalculateAverageMeasurements() : measurements;
 
-            Log.Information("{Identity}: Pushing measurements to InfluxBridge: {measurements}", GetIdentity(), measurements);
+            _logger.LogInformation("{Identity}: Saving measurements: {measurements}", GetIdentity(), measurements);
 
             var result = await GrainFactory.GetGrain<IInfluxBridge>(0)
                 .WriteMeasurements(_ruuviTagState.State.MacAddress, _ruuviTagState.State.StoreName ? _ruuviTagState.State.Name : null, measurements);
@@ -256,9 +265,18 @@ namespace net.jommy.RuuviCore.Grains
             _ruuviTagState.State.LatestMeasurements.Add(measurements);
         }
 
-        private static bool TryParseMeasurements(byte[] data, bool discardInvalidValues, out Measurements measurements)
+        private bool TryParseMeasurements(byte[] data, bool discardInvalidValues, out Measurements measurements)
         {
-            return DataParserFactory.GetParser(data).TryParseMeasurements(data, discardInvalidValues, out measurements);
+            try
+            {
+                return DataParserFactory.GetParser(data).TryParseMeasurements(data, discardInvalidValues, out measurements);
+            }
+            catch (Exception e)
+            {
+                _logger.LogError("Failed to parse measurements: {errorMessage}", e.Message);
+                measurements = null;
+                return false;
+            }
         }
 
         private string GetIdentity()
@@ -270,13 +288,13 @@ namespace net.jommy.RuuviCore.Grains
 
         private async Task<DeviceClient> ConnectToAzureIoT()
         {
-            Log.Information("Connecting {identity} to Azure IoT.", GetIdentity());
+            _logger.LogInformation("Connecting {identity} to Azure IoT.", GetIdentity());
             using var security =
                 new SecurityProviderSymmetricKey(this.GetPrimaryKeyString(), _ruuviTagState.State.AzurePrimaryKey, null);
             var result = await RegisterDevice(security);
             if (result.Status != ProvisioningRegistrationStatusType.Assigned)
             {
-                Log.Error("Failed to register device {identity} to Azure IoT.", GetIdentity());
+                _logger.LogError("Failed to register device {identity} to Azure IoT.", GetIdentity());
                 return null;
             }
 
@@ -294,7 +312,7 @@ namespace net.jommy.RuuviCore.Grains
 
             var result = await provClient.RegisterAsync();
 
-            Log.Information("Registration result: {result}.", result.Status);
+            _logger.LogInformation("Registration result: {result}.", result.Status);
             return result;
         }
 
@@ -309,7 +327,7 @@ namespace net.jommy.RuuviCore.Grains
                     _ruuviTagState.State.UseAzure = false;
                 }
             }
-            Log.Information("{Identity}: Sending measurements to Azure IoT.", GetIdentity());
+            _logger.LogInformation("{Identity}: Sending measurements to Azure IoT.", GetIdentity());
 
             var telemetryDataPoint = new
             {
@@ -329,12 +347,15 @@ namespace net.jommy.RuuviCore.Grains
         {
             if (!_ruuviTagState.State.Initialized)
             {
-                Log.Warning("An uninitialized RuuviTag {macAddress} receiving data with signal strength {signalStrength}. (Ignoring packet)", 
+                _logger.LogWarning("An uninitialized RuuviTag {macAddress} receiving data with signal strength {signalStrength}. (Ignoring packet)", 
                     measurementEnvelope.MacAddress,
                     measurementEnvelope.SignalStrength);
                 return;
             }
-            await StoreMeasurementData(measurementEnvelope.Timestamp, measurementEnvelope.SignalStrength, measurementEnvelope.Data);
+
+            _ruuviTagState.State.SignalStrength = measurementEnvelope.SignalStrength.GetValueOrDefault(_ruuviTagState.State.SignalStrength);
+            
+            await StoreMeasurementDataAsync(measurementEnvelope.Timestamp, _ruuviTagState.State.SignalStrength, measurementEnvelope.Data);
             await GrainFactory.GetGrain<IRuuviTagRegistry>(0).Refresh(_ruuviTagState.State.MacAddress, measurementEnvelope.Timestamp);
         }
 
@@ -345,7 +366,7 @@ namespace net.jommy.RuuviCore.Grains
 
         public Task OnErrorAsync(Exception ex)
         {
-            Log.Error(ex, "{ruuviTag} | Stream error.", _ruuviTagState.State.Name ?? _ruuviTagState.State.MacAddress);
+            _logger.LogError(ex, "{ruuviTag} | Stream error.", _ruuviTagState.State.Name ?? _ruuviTagState.State.MacAddress);
             return Task.CompletedTask;
         }
 
@@ -367,7 +388,6 @@ namespace net.jommy.RuuviCore.Grains
         {
             var dirty = false;
             var updateRegistry = ruuviTag.Name != _ruuviTagState.State.Name;
-            var dashboardSettingChanged = ruuviTag.IncludeInDashboard != _ruuviTagState.State.InDashboard;
 
             if (!_ruuviTagState.State.Initialized)
             {
@@ -423,6 +443,14 @@ namespace net.jommy.RuuviCore.Grains
                 dirty = true;
                 _ruuviTagState.State.InDashboard = ruuviTag.IncludeInDashboard;
             }
+
+            if (ruuviTag.AlertRules != null && (ruuviTag.AlertRules == null || 
+                ruuviTag.AlertRules.Count != _ruuviTagState.State.AlertRules.Count ||
+                 !ruuviTag.AlertRules.Any(AlertRuleDiffers)))
+            {
+                dirty = true;
+                _ruuviTagState.State.AlertRules = ruuviTag.AlertRules;
+            }
             
             if (dirty)
             {
@@ -432,6 +460,16 @@ namespace net.jommy.RuuviCore.Grains
                     await GrainFactory.GetGrain<IRuuviTagRegistry>(0).AddOrUpdate(_ruuviTagState.State.MacAddress, _ruuviTagState.State.Name);
                 }
             }
+        }
+
+        private bool AlertRuleDiffers(KeyValuePair<string, AlertThresholds> newRules)
+        {
+            if (_ruuviTagState.State.AlertRules.TryGetValue(newRules.Key, out var value))
+            {
+                return value.MinValidValue != newRules.Value.MinValidValue || value.MaxValidValue != newRules.Value.MaxValidValue;
+            }
+
+            return true;
         }
     }
 }

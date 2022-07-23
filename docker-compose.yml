@@ -1,0 +1,14 @@
+version: '3'
+services:
+  ruuvicore:
+    container_name: ruuvi-core
+    image: ruuvicore:latest
+    environment:
+    - "ListeningSettings__HttpEnabled=true"
+    restart: always
+    networks: 
+    - host
+    
+networks:
+  host:
+    external: true  

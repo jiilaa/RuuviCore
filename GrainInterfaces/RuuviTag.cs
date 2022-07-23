@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using net.jommy.RuuviCore.Common;
 
 namespace net.jommy.RuuviCore.Interfaces
 {
@@ -12,7 +14,7 @@ namespace net.jommy.RuuviCore.Interfaces
         public bool StoreName { get; set; }
         public bool DiscardMinMaxValues { get; set; }
         public bool AllowMeasurementsThroughGateway { get; set; }
-        
         public bool IncludeInDashboard { get; set; }
+        public IDictionary<string, AlertThresholds> AlertRules { get; set; }
     }
 }

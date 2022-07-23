@@ -11,7 +11,7 @@ namespace net.jommy.RuuviCore.Grains
     {
         public async Task Publish(string target, MeasurementEnvelope envelope)
         {
-            var streamProvider = GetStreamProvider("SimpleStreamProvider");
+            var streamProvider = GetStreamProvider(RuuviCoreConstants.StreamProviderName);
             var stream = streamProvider.GetStream<MeasurementEnvelope>(target.ToActorGuid(), "MeasurementStream");
             await stream.OnNextAsync(envelope);
         }

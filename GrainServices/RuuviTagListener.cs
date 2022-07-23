@@ -23,15 +23,16 @@ namespace net.jommy.RuuviCore.GrainServices
             _grainAddress = deviceAddress.ToActorGuid();
         }
 
-        protected override async Task HandlePropertiesChanged(byte[] manufacturerData)
+        protected override async Task HandlePropertiesChanged(byte[] manufacturerData, short? signalStrength)
         {
+            _logger.LogDebug("Publishing ruuvi data to ruuvi actor {MAC}", DeviceAddress);
             await GrainFactory.GetGrain<IRuuviStreamWorker>(0).Publish(
                 DeviceAddress,
                 new MeasurementEnvelope
                 {
                     MacAddress = DeviceAddress,
                     Timestamp = DateTime.UtcNow,
-                    SignalStrength = await GetSignalStrength(),
+                    SignalStrength = signalStrength,
                     Data = manufacturerData
                 });
         }
@@ -42,7 +43,7 @@ namespace net.jommy.RuuviCore.GrainServices
             var name = await ruuviTag.GetName();
             if (name != null)
             {
-                _logger.LogInformation("RuuviTag {name} ({mac}) found.", name, DeviceAddress);
+                _logger.LogInformation("Listening ruuvitag {name} ({mac}).", name, DeviceAddress);
             }
             else
             {

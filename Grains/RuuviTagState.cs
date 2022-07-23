@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using net.jommy.RuuviCore.Common;
 using net.jommy.RuuviCore.Interfaces;
 
 namespace net.jommy.RuuviCore.Grains
@@ -20,5 +21,14 @@ namespace net.jommy.RuuviCore.Grains
         public string AzurePrimaryKey { get; set; }
         public string AzureScopeId { get; set; }
         public bool InDashboard { get; set; }
+
+        public short SignalStrength { get; set; }
+
+        public IDictionary<string, AlertThresholds> AlertRules { get; set; }
+
+        public RuuviTagState()
+        {
+            AlertRules = new Dictionary<string, AlertThresholds>();
+        }
     }
 }

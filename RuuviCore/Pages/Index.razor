@@ -1,3 +1,75 @@
 ﻿@page "/"
+@using Append.Blazor.Notifications
+@inject INotificationService NotificationService
 
 <h1>Dashboard coming soon.</h1>
+
+<h1>Desktop Notifications! <small>Basic</small></h1>
+<div class="row">
+    <div class="col-md">
+        <div class="form-group">
+            <label>Supported By Browser?</label>
+            <div class="alert @(isSupportedByBrowser ? "alert-success" : "alert-warning")" role="alert">
+                @(isSupportedByBrowser ? "Notifications are supported!" : "Notifications are not supported by this browser")
+            </div>
+        </div>
+    </div>
+    <div class="col-md">
+        <div class="form-group">
+            <label>User has permission?</label>
+            <div class="alert @(NotificationService.PermissionStatus == PermissionType.Granted ? "alert-success" : NotificationService.PermissionStatus == PermissionType.Default ? "alert-secondary" :"alert-warning")" role="alert">
+                The user's permission is: @NotificationService.PermissionStatus.ToString()
+            </div>
+        </div>
+    </div>
+</div>
+<div class="row">
+    <div class="col-md">
+        <div class="form-group">
+            <label for="title">Notification Title</label>
+            <input type="text" class="form-control" id="title" placeholder="Enter Title..." @bind="title" />
+            <small class="form-text text-muted">The title will show up at the top of the notification.</small>
+        </div>
+        <div class="form-group">
+            <label for="title">Notification Body</label>
+            <input type="text" class="form-control" id="body" placeholder="Enter Body..." @bind="body" />
+            <small class="form-text text-muted">The body will show up below the title.</small>
+        </div>
+        <div class="form-group">
+            <label for="title">Notification Icon</label>
+            <input type="text" class="form-control" id="icon" placeholder="Enter Icon..." @bind="icon" />
+            <small class="form-text text-muted">The Icon of the notification, loaded from wwwroot/images/</small>
+        </div>
+    </div>
+</div>
+<div class="row">
+    <div class="col-auto mr-auto"></div>
+    <div class="col-auto">
+        <button type="button" class="btn btn-light" @onclick="RequestPermission">Request Permission</button>
+        <button type="button" class="btn btn-primary" @onclick="CreateNotificationAsync">Create Notification</button>
+    </div>
+</div>
+
+
+@functions{
+    private bool isSupportedByBrowser = true;
+    private string title = "My Dummy Title";
+    private string body = "Lorem ipsum dolor sit ...";
+    private string icon = "images/github.png";
+
+    private async Task CreateNotificationAsync()
+    {
+        var options = new NotificationOptions
+        {
+            Body = body,
+            Icon = icon,
+            Renotify = true // By default a notification is not overwritten, so there can only be one.
+        };
+
+        await NotificationService.CreateAsync(title, options);
+    }
+    private async Task RequestPermission()
+    {
+        await NotificationService.RequestPermissionAsync();
+    }
+}

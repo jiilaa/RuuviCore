@@ -19,7 +19,9 @@ using Serilog;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Logging;
 using Orleans.Configuration;
+using Orleans.Providers;
 using Orleans.Runtime.Configuration;
+using Serilog.Events;
 
 namespace net.jommy.RuuviCore
 {
@@ -39,18 +41,11 @@ namespace net.jommy.RuuviCore
             Console.Write(Logo);
             Console.WriteLine($"Version: {Assembly.GetEntryAssembly()?.GetName().Version}");
             
-            IHost siloHost;
+            var useHttpGateway = args != null && args.Contains("--http");
+            var useSimpleStream = args != null && args.Contains("--simplestream");
 
-            if (args != null && args.Length > 0 && args.First() == "--http")
-            {
-                Console.WriteLine("Starting RuuviCore with HTTP gateway...");
-                siloHost = BootstrapSiloWithHttpGateway();
-            }
-            else
-            {
-                Console.WriteLine("Starting RuuviCore...");
-                siloHost = CreateSilo();
-            }
+            Console.WriteLine("Starting RuuviCore...");
+            var siloHost = BootstrapSilo(useHttpGateway, useSimpleStream);
 
             try
             {
@@ -62,25 +57,45 @@ namespace net.jommy.RuuviCore
             }
         }
 
-        private static IHost BootstrapSiloWithHttpGateway()
+        private static IHost BootstrapSilo(bool useHttpGateway, bool useSimpleStream)
         {
-            return Host.CreateDefaultBuilder()
-                .ConfigureAppConfiguration((hostingContext, config) =>
+            var configuration = new ConfigurationBuilder()
+                .SetBasePath(AppDomain.CurrentDomain.BaseDirectory)
+                .AddJsonFile("appsettings.json", false, false).Build();
+
+            var hostBuilder = Host.CreateDefaultBuilder()
+                .ConfigureAppConfiguration((_, config) =>
                 {
-                    config.AddJsonFile("appsettings.json", optional: true, reloadOnChange: true);
+                    config.AddJsonFile("appsettings.json", true, true);
                 })
-                .ConfigureWebHostDefaults(webBuilder =>
+                .UseSerilog((context, loggerConfiguration) =>
+                {
+                    loggerConfiguration
+                        .WriteTo.Console()
+                        .MinimumLevel.Information()
+                        .MinimumLevel.Override("Orleans", LogEventLevel.Error)
+                        .MinimumLevel.Override("Microsoft.Orleans", LogEventLevel.Error)
+                        .MinimumLevel.Override("Microsoft.AspNetCore.Hosting.Diagnostics", LogEventLevel.Error);
+                })
+                .UseOrleans(siloHostBuilder => ConfigureOrleans(siloHostBuilder, useSimpleStream, configuration))
+                .ConfigureLogging(ConfigureLogging())
+                .ConfigureServices(collection => collection.AddBlazorStrap())
+                .UseConsoleLifetime(options => options.SuppressStatusMessages = true)
+                .ConfigureHostOptions(options => options.ShutdownTimeout = TimeSpan.FromSeconds(30));
+
+            if (useHttpGateway)
+            {
+                hostBuilder.ConfigureWebHostDefaults(webBuilder =>
                 {
                     webBuilder.ConfigureKestrel((context, options) =>
                     {
                         var configurationSection = context.Configuration.GetSection("ListeningSettings");
-                        if (UseHttps(configurationSection, out var port, out var certificateFile,
-                            out var certificateKey))
+                        if (UseHttps(configurationSection, out var port, out var certificateFile, out var certificateKey))
                         {
                             options.Listen(IPAddress.Any, port, listenOptions =>
                             {
                                 listenOptions.UseHttps(adapterOptions => adapterOptions.ServerCertificateSelector =
-                                    (connectionContext, s) => new X509Certificate2(certificateFile, certificateKey));
+                                    (_, _) => new X509Certificate2(certificateFile, certificateKey));
                             });
                         }
                         else
@@ -90,94 +105,67 @@ namespace net.jommy.RuuviCore
                     });
 
                     webBuilder.UseStartup<Startup>();
-                })
-                .UseOrleans(siloHostBuilder =>
-                {
-                    siloHostBuilder
-                        .UseLocalhostClustering(serviceId: "RuuviCore", clusterId: "rc")
-                        .ConfigureApplicationParts(parts =>
-                        {
-                            parts.AddApplicationPart(typeof(RuuviTagGrain).Assembly).WithReferences();
-                            parts.AddApplicationPart(typeof(InfluxBridge).Assembly).WithReferences();
-                        })
-                        .Configure<DeploymentLoadPublisherOptions>(options =>
-                            options.DeploymentLoadPublisherRefreshTime = TimeSpan.FromHours(1))
-                        .Configure<StatisticsOptions>(options =>
-                        {
-                            options.CollectionLevel = StatisticsLevel.Critical;
-                            options.LogWriteInterval = TimeSpan.FromHours(1);
-                            options.PerfCountersWriteInterval = TimeSpan.FromDays(1);
-                        })
-                        .AddGrainService<DBusListener>()
-                        .AddFileStorageGrainStorage(RuuviCoreConstants.GrainStorageName,
-                            options => options.Directory = "RuuviTags")
-                        .AddMemoryGrainStorage("PubSubStore")
-                        .AddSimpleMessageStreamProvider("SimpleStreamProvider");
-                })
-                .ConfigureLogging(builder =>
-                {
-                    builder
-                        .AddSerilog()
-                        .AddFilter("Orleans", LogLevel.Warning)
-                        .AddFilter("Orleans.Runtime.NoOpHostEnvironmentStatistics", LogLevel.Error)
-                        .AddFilter("Orleans.Runtime.MembershipService", LogLevel.Error)
-                        .AddFilter("Microsoft.Orleans.Messaging", LogLevel.Error)
-                        .AddFilter("Microsoft.Orleans.Networking", LogLevel.Error)
-                        .AddFilter("Orleans.Runtime.Scheduler.WorkItemGroup", LogLevel.Error)
-                        .AddFilter("Microsoft.AspNetCore.Hosting.Diagnostics", LogLevel.Warning)
-                        .AddFilter("Runtime", LogLevel.Warning);
-                })
-                .ConfigureServices(collection => collection.AddBootstrapCss())
-                .UseConsoleLifetime(options => options.SuppressStatusMessages = true) 
-                .Build();
+                });
+            }
+
+            return hostBuilder.Build();
         }
 
-        private static IHost CreateSilo()
+        private static void ConfigureOrleans(ISiloBuilder siloHostBuilder, bool useSimpleStream, IConfiguration configuration)
         {
-            var configuration = new ConfigurationBuilder()
-                .SetBasePath(AppDomain.CurrentDomain.BaseDirectory)
-                .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true).Build();
+            siloHostBuilder
+                .UseLocalhostClustering(serviceId: "RuuviCore", clusterId: "rc")
+                .ConfigureApplicationParts(parts =>
+                {
+                    parts.AddApplicationPart(typeof(RuuviTagGrain).Assembly).WithReferences();
+                    parts.AddApplicationPart(typeof(InfluxBridge).Assembly).WithReferences();
+                })
+                .Configure<DeploymentLoadPublisherOptions>(options =>
+                    options.DeploymentLoadPublisherRefreshTime = TimeSpan.FromHours(1))
+                .Configure<StatisticsOptions>(options =>
+                {
+                    options.CollectionLevel = StatisticsLevel.Critical;
+                    options.LogWriteInterval = TimeSpan.FromHours(1);
+                    options.PerfCountersWriteInterval = TimeSpan.FromDays(1);
+                })
+                .Configure<FileStorageProviderOptions>(options => options.Directory = "RuuviTags")
+                .ConfigureServices(services =>
+                {
+                    services.Configure<DBusSettings>(configuration.GetSection("DBusSettings"));
+                    services.Configure<InfluxSettings>(configuration.GetSection("InfluxSettings"));
+                })
+                .AddGrainService<DBusListener>()
+                .AddFileStorageGrainStorage(RuuviCoreConstants.GrainStorageName, options => options.Directory = "RuuviTags")
+                .AddMemoryGrainStorage("PubSubStore");
+            if (useSimpleStream)
+            {
+                siloHostBuilder.AddSimpleMessageStreamProvider(RuuviCoreConstants.StreamProviderName);
+            }
+            else
+            {
+                siloHostBuilder.AddMemoryStreams<DefaultMemoryMessageBodySerializer>(RuuviCoreConstants.StreamProviderName,
+                    configurator =>
+                    {
+                        configurator.ConfigurePartitioning(numOfQueues: 2);
+                    });
+            }
+        }
 
-            return Host.CreateDefaultBuilder()
-                .ConfigureAppConfiguration((hostingContext, config) =>
-                {
-                    config.AddJsonFile(
-                        "appsettings.core.json", optional: true, reloadOnChange: true);
-                })
-                .UseOrleans(siloHostBuilder =>
-                {
-                    siloHostBuilder
-                        .UseLocalhostClustering(serviceId: "RuuviCore", clusterId: "rc")
-                        .ConfigureApplicationParts(parts =>
-                        {
-                            parts.AddApplicationPart(typeof(RuuviTagGrain).Assembly).WithReferences();
-                            parts.AddApplicationPart(typeof(InfluxBridge).Assembly).WithReferences();
-                        })
-                        .ConfigureServices(services =>
-                        {
-                            services.Configure<DBusSettings>(configuration.GetSection("DBusSettings"));
-                            services.Configure<InfluxSettings>(configuration.GetSection("InfluxSettings"));
-                        })
-                        .AddGrainService<DBusListener>()
-                        .AddFileStorageGrainStorage("RuuviStorage", options => options.Directory = "RuuviTags")
-                        .AddMemoryGrainStorage("PubSubStore")
-                        .AddSimpleMessageStreamProvider("SimpleStreamProvider");
-                })
-                .ConfigureLogging(builder =>
-                {
-                    builder
-                        .AddSerilog()
-                        .AddFilter("Orleans", LogLevel.Warning)
-                        .AddFilter("Orleans.Runtime.NoOpHostEnvironmentStatistics", LogLevel.Error)
-                        .AddFilter("Orleans.Runtime.MembershipService", LogLevel.Error)
-                        .AddFilter("Microsoft.Orleans.Messaging", LogLevel.Error)
-                        .AddFilter("Microsoft.Orleans.Networking", LogLevel.Error)
-                        .AddFilter("Orleans.Runtime.Scheduler.WorkItemGroup", LogLevel.Error)
-                        .AddFilter("Microsoft.AspNetCore.Hosting.Diagnostics", LogLevel.Warning)
-                        .AddFilter("Runtime", LogLevel.Warning);
-                })
-                .UseConsoleLifetime(options => options.SuppressStatusMessages = true) 
-                .Build();
+        private static Action<ILoggingBuilder> ConfigureLogging()
+        {
+            return builder =>
+            {
+                builder
+                    .AddSerilog()
+                    .AddFilter("Orleans", LogLevel.Warning)
+                    .AddFilter("Orleans.Runtime.NoOpHostEnvironmentStatistics", LogLevel.Error)
+                    .AddFilter("Orleans.Runtime.MembershipService", LogLevel.Error)
+                    .AddFilter("Microsoft.Orleans.Messaging", LogLevel.Error)
+                    .AddFilter("Microsoft.Orleans.Networking", LogLevel.Error)
+                    .AddFilter("Orleans.Runtime.Scheduler.WorkItemGroup", LogLevel.Error)
+                    .AddFilter("Microsoft.AspNetCore.Hosting.Diagnostics", LogLevel.Warning)
+                    .AddFilter("Runtime", LogLevel.Warning);
+            };
         }
 
         private static bool UseHttps(IConfigurationSection configurationSection, out int port,
