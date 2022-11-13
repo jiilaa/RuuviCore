@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using bluez.DBus;
+using Microsoft.Extensions.Logging;
 using Orleans;
 using Tmds.DBus;
 
@@ -21,6 +22,7 @@ namespace net.jommy.RuuviCore.GrainServices
 
         protected readonly string DeviceAddress;
         protected readonly IGrainFactory GrainFactory;
+        private readonly ILogger _logger;
 
         protected abstract Task HandlePropertiesChanged(byte[] manufacturerData, short? signalStrength);
 
@@ -28,16 +30,18 @@ namespace net.jommy.RuuviCore.GrainServices
         
         protected abstract ushort ManufacturerKey { get; }
 
-        protected AbstractDeviceListener(IDevice1 device, string deviceAddress, IGrainFactory grainFactory)
+        protected AbstractDeviceListener(IDevice1 device, string deviceAddress, IGrainFactory grainFactory, ILogger logger)
         {
             _device = device;
             DeviceAddress = deviceAddress;
             GrainFactory = grainFactory;
+            _logger = logger;
         }
 
         /// <inheritdoc />
         public void Dispose()
         {
+            GC.SuppressFinalize(this);
             _propertiesWatcher?.Dispose();
         }
 
@@ -54,7 +58,7 @@ namespace net.jommy.RuuviCore.GrainServices
             return _aliveCounter <= AliveThreshold;
         }
 
-        protected Task<short> GetSignalStrength()
+        private Task<short> GetSignalStrength()
         {
             return _device.GetAsync<short>(SignalStrengthKeyName);
         }
@@ -87,8 +91,7 @@ namespace net.jommy.RuuviCore.GrainServices
             }
             catch (Exception e)
             {
-                Console.WriteLine(e);
-                throw;
+                _logger.LogError("Failed to handle properties changed event for device {deviceAddress}: {error}", DeviceAddress, e.Message);
             }
         }
     }

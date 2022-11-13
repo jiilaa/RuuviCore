@@ -8,9 +8,9 @@
     <Version>0.6.0</Version>
     <Authors>Jomi Laakkonen</Authors>
     <Company />
-    <PackageVersion>0.6.0</PackageVersion>
-    <AssemblyVersion>0.6.0</AssemblyVersion>
-    <FileVersion>0.6.0</FileVersion>
+    <PackageVersion>0.6.1</PackageVersion>
+    <AssemblyVersion>0.6.1</AssemblyVersion>
+    <FileVersion>0.6.1</FileVersion>
     <UserSecretsId>d40304c8-3507-41b4-883a-dca7cf14316c</UserSecretsId>
     <DockerDefaultTargetOS>Linux</DockerDefaultTargetOS>
     <StartupObject>net.jommy.RuuviCore.Program</StartupObject>
@@ -23,14 +23,14 @@
 
   <ItemGroup>
     <PackageReference Include="Append.Blazor.Notifications" Version="1.1.0" />
-    <PackageReference Include="BlazorStrap" Version="5.0.105.4262022" />
+    <PackageReference Include="BlazorStrap" Version="5.0.106" />
     <PackageReference Include="Microsoft.Bcl.AsyncInterfaces" Version="6.0.0" />
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="6.0.1" />
-    <PackageReference Include="Microsoft.Orleans.Server" Version="3.6.2" />
-    <PackageReference Include="Serilog" Version="2.11.0" />
+    <PackageReference Include="Microsoft.Orleans.Server" Version="3.6.5" />
+    <PackageReference Include="Serilog" Version="2.12.0" />
     <PackageReference Include="Serilog.Extensions.Hosting" Version="5.0.1" />
     <PackageReference Include="Serilog.Extensions.Logging" Version="3.1.0" />
-    <PackageReference Include="Serilog.Sinks.Console" Version="4.0.1" />
+    <PackageReference Include="Serilog.Sinks.Console" Version="4.1.0" />
     <PackageReference Include="Serilog.Sinks.File" Version="5.0.0" />
   </ItemGroup>
 

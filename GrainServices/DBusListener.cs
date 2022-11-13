@@ -133,7 +133,14 @@ namespace net.jommy.RuuviCore.GrainServices
                     _logger.LogDebug("Skipping device without manufacturer data.");
                     return;
                 }
-                throw;
+
+                _logger.LogError("Error getting manufacturer data: {errorMessage}. Continuing.", e.Message);
+                return;
+            }
+            catch (Exception e)
+            {
+                _logger.LogError("A non-DBUS exception occurred: {errorMessage}. Continuing.", e.Message);
+                return;
             }
             
             if (manufacturerData != null)

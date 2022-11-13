@@ -17,7 +17,7 @@ namespace net.jommy.RuuviCore.GrainServices
         protected override ushort ManufacturerKey => RuuviManufacturerDataKey;
 
         public RuuviTagListener(IDevice1 device, string deviceAddress, IGrainFactory grainFactory, ILogger<RuuviTagListener> logger)
-            :base(device, deviceAddress, grainFactory)
+            : base(device, deviceAddress, grainFactory, logger)
         {
             _logger = logger;
             _grainAddress = deviceAddress.ToActorGuid();
