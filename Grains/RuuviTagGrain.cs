@@ -62,7 +62,7 @@ namespace net.jommy.RuuviCore.Grains
             await _ruuviTagState.WriteStateAsync();
         }
 
-        public async Task Initialize(string macAddress, string name, DataSavingOptions dataSavingOptions)
+        public async Task Initialize(string macAddress, string name, DataSavingOptions dataSavingOptions, List<string> bridges)
         {
             if (macAddress.ToActorGuid() != this.GetPrimaryKey())
             {
@@ -76,6 +76,13 @@ namespace net.jommy.RuuviCore.Grains
             _ruuviTagState.State.StoreAcceleration = dataSavingOptions.StoreAcceleration;
             _ruuviTagState.State.DiscardMinMaxValues = dataSavingOptions.DiscardMinMaxValues;
             _ruuviTagState.State.Initialized = true;
+            
+            if (bridges != null && bridges.Any())
+            {
+                await CheckBridgesAsync(bridges);
+                _ruuviTagState.State.Bridges = bridges;
+            }
+            
             await _ruuviTagState.WriteStateAsync();
             await GrainFactory.GetGrain<IRuuviTagRegistry>(0).AddOrUpdate(macAddress, name);
         }
@@ -170,8 +177,17 @@ namespace net.jommy.RuuviCore.Grains
 
             _logger.LogInformation("{Identity}: Saving measurements: {measurements}", GetIdentity(), measurements);
 
-            var result = await GrainFactory.GetGrain<IInfluxBridge>(0)
-                .WriteMeasurements(_ruuviTagState.State.MacAddress, _ruuviTagState.State.StoreName ? _ruuviTagState.State.Name : null, measurements);
+            var result = true; 
+            foreach (var bridgeName in _ruuviTagState.State.Bridges)
+            {
+                var success = await GrainFactory.GetGrain<IInfluxBridge>(bridgeName)
+                    .WriteMeasurements(_ruuviTagState.State.MacAddress, _ruuviTagState.State.StoreName ? _ruuviTagState.State.Name : null, measurements);
+                if (result)
+                {
+                    // If any push to bridge fails, return false
+                    result = success;
+                }
+            }
 
             if (_ruuviTagState.State.UseAzure)
             {
@@ -325,6 +341,7 @@ namespace net.jommy.RuuviCore.Grains
                 {
                     Log.Error("Could not initialize the connection to Azure IoT. Disabling the connection.");
                     _ruuviTagState.State.UseAzure = false;
+                    return;
                 }
             }
             _logger.LogInformation("{Identity}: Sending measurements to Azure IoT.", GetIdentity());
@@ -382,6 +399,29 @@ namespace net.jommy.RuuviCore.Grains
                 AllowMeasurementsThroughGateway = _ruuviTagState.State.AllowMeasurementsThroughGateway,
                 DiscardMinMaxValues = _ruuviTagState.State.DiscardMinMaxValues
             });
+        }
+
+        public async Task SetBridges(List<string> bridges)
+        {
+            if (bridges == null || !bridges.Any())
+            {
+                throw new ArgumentException("Bridges list was empty");
+            }
+            
+            await CheckBridgesAsync(bridges);
+            _ruuviTagState.State.Bridges = bridges;
+            await _ruuviTagState.WriteStateAsync();
+        }
+
+        private async Task CheckBridgesAsync(List<string> bridges)
+        {
+            foreach (var bridge in bridges)
+            {
+                if (!await GrainFactory.GetGrain<IInfluxBridge>(bridge).IsValid())
+                {
+                    throw new ArgumentException($"Invalid bridge encountered: '{bridge}'");
+                }
+            }
         }
 
         public async Task Edit(RuuviTag ruuviTag)

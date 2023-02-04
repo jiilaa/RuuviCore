@@ -1,4 +1,6 @@
 ﻿using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
 using CommandLine;
@@ -34,6 +36,9 @@ namespace net.jommy.RuuviCore
 
         [Option('c', longName: "checkValidity", Required = false, HelpText = "Whether the RuuviTag should do some crude sanity checks for incoming data.")]
         public bool? CheckValidity { get; set; }
+
+        [Option('b', longName: "bridges", Required = false, HelpText = "Comma separated list of influx bridges the measurements should be pushed to. Overwrites existing.", Default = "default")]
+        public string Bridges { get; set; }
     }
 
     [Verb("add", HelpText = "Adds a new RuuviTag with given options. If a RuuviTag with specified MAC is already added, returns an error, unless overwrite option is used.")]
@@ -59,6 +64,9 @@ namespace net.jommy.RuuviCore
         
         [Option('o', Required = false, HelpText = "If a RuuviTag is registered with the same MAC address, overwrite the configuration (even with the default values).", Default = false)]
         public bool Overwrite { get; set; }
+
+        [Option('b', longName: "bridges", Required = false, HelpText = "Comma separated list of influx bridges the measurements should be pushed to.", Default = "default")]
+        public string Bridges { get; set; }
     }
 
     [Verb("view", HelpText = "Display information of a RuuviTag. As a side effect, creates a new (unconfigured) RuuviTag with specified MAC address if one does not exist.")]
@@ -108,9 +116,13 @@ namespace net.jommy.RuuviCore
                         (AzureOptions options) => ConfigureAzure(options),
                         errs => Task.FromResult(1));
             }
+            catch (ArgumentException e)
+            {
+                Console.WriteLine(e.Message);
+            }
             catch (Exception e)
             {
-                Console.WriteLine(e);
+                Console.WriteLine(e.Message);
                 throw;
             }
         }
@@ -173,7 +185,7 @@ namespace net.jommy.RuuviCore
 
         private static async Task<int> EditRuuviTag(EditOptions options)
         {
-            using var client = await ConnectClient();
+            await using var client = await ConnectClient();
             var ruuviTag = client.GetGrain<IRuuviTag>(options.MACAddress.ToActorGuid());
             if (options.Name != null)
             {
@@ -183,6 +195,12 @@ namespace net.jommy.RuuviCore
             if (options.AllowHttp.HasValue)
             {
                 await ruuviTag.AllowMeasurementsThroughGateway(options.AllowHttp.Value);
+            }
+
+            if (options.Bridges != null)
+            {
+                await ruuviTag.SetBridges(options.Bridges.Split(",").ToList());
+                Console.WriteLine("Bridges saved successfully");
             }
 
             if (options.Acceleration.HasValue || options.Average.HasValue || options.Interval.HasValue)
@@ -196,7 +214,7 @@ namespace net.jommy.RuuviCore
                 await ruuviTag.SetDataSavingOptions(existingOptions);
                 Console.WriteLine($"Saved options: {existingOptions}.");
             }
-            else if (!options.AllowHttp.HasValue)
+            else if (!options.AllowHttp.HasValue && options.Bridges == null)
             {
                 Console.WriteLine("No options specified.");
             }
@@ -206,7 +224,7 @@ namespace net.jommy.RuuviCore
 
         private static async Task<int> AddRuuviTag(AddOptions options)
         {
-            using var client = await ConnectClient();
+            await using var client = await ConnectClient();
             var ruuviTag = client.GetGrain<IRuuviTag>(options.MACAddress.ToActorGuid());
 
             if (!options.Overwrite)
@@ -218,13 +236,19 @@ namespace net.jommy.RuuviCore
                 }
             }
 
+            var bridges = new List<string>();
+            if (options.Bridges != null)
+            {
+                bridges.AddRange(options.Bridges.Split(","));
+            }
+
             await ruuviTag.Initialize(options.MACAddress, options.Name, new DataSavingOptions
             {
                 CalculateAverages = options.Average,
                 DataSavingInterval = options.Interval,
                 StoreAcceleration = options.Acceleration,
                 DiscardMinMaxValues = options.CheckValidity
-            });
+            }, bridges);
 
             if (options.AllowHttp)
             {
