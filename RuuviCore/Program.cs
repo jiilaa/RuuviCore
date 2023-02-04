@@ -79,7 +79,11 @@ namespace net.jommy.RuuviCore
                 })
                 .UseOrleans(siloHostBuilder => ConfigureOrleans(siloHostBuilder, useSimpleStream, configuration))
                 .ConfigureLogging(ConfigureLogging())
-                .ConfigureServices(collection => collection.AddBlazorStrap())
+                .ConfigureServices(collection =>
+                {
+                    collection.AddBlazorStrap();
+                    collection.AddSingleton<IInfluxSettingsFactory, InfluxSettingsFactory>();
+                })
                 .UseConsoleLifetime(options => options.SuppressStatusMessages = true)
                 .ConfigureHostOptions(options => options.ShutdownTimeout = TimeSpan.FromSeconds(30));
 
@@ -132,7 +136,7 @@ namespace net.jommy.RuuviCore
                 .ConfigureServices(services =>
                 {
                     services.Configure<DBusSettings>(configuration.GetSection("DBusSettings"));
-                    services.Configure<InfluxSettings>(configuration.GetSection("InfluxSettings"));
+                    services.Configure<InfluxBridgeList>(configuration.GetSection("InfluxSettings"));
                 })
                 .AddGrainService<DBusListener>()
                 .AddFileStorageGrainStorage(RuuviCoreConstants.GrainStorageName, options => options.Directory = "RuuviTags")

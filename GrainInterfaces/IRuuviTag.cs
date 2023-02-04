@@ -7,7 +7,7 @@ namespace net.jommy.RuuviCore.Interfaces
 {
     public interface IRuuviTag : IGrainWithGuidKey
     {
-        Task Initialize(string macAddress, string name, DataSavingOptions dataSavingOptions);
+        Task Initialize(string macAddress, string name, DataSavingOptions dataSavingOptions, List<string> bridges);
         
         Task SetName(string name);
 
@@ -30,5 +30,7 @@ namespace net.jommy.RuuviCore.Interfaces
         Task<RuuviTag> GetTag();
 
         Task Edit(RuuviTag ruuviTag);
+        
+        Task SetBridges(List<string> bridges);
     }
 }
