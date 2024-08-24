@@ -1,12 +1,12 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
-        <TargetFramework>net6.0</TargetFramework>
+        <TargetFramework>net8.0</TargetFramework>
         <RootNamespace>net.jommy.RuuviCore.Common</RootNamespace>
     </PropertyGroup>
 
     <ItemGroup>
-      <PackageReference Include="Orleans.Streams.Utils" Version="11.1.0" />
+      <PackageReference Include="Microsoft.Orleans.Sdk" Version="8.0.0-rc2" />
     </ItemGroup>
 
 </Project>

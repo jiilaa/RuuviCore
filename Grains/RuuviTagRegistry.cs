@@ -1,106 +1,106 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using net.jommy.RuuviCore.Interfaces;
 using Orleans;
 using Orleans.Runtime;
 
-namespace net.jommy.RuuviCore.Grains
+namespace net.jommy.RuuviCore.Grains;
+
+public class RuuviTagRegistry : Grain, IRuuviTagRegistry
 {
-    public class RuuviTagRegistry : Grain, IRuuviTagRegistry
+    private readonly IPersistentState<RuuviTagRegistryState> _ruuviTagRegistry;
+    private IDisposable _timer;
+
+    public RuuviTagRegistry([PersistentState(nameof(RuuviTagRegistryState), "RuuviStorage")]
+        IPersistentState<RuuviTagRegistryState> ruuviTagRegistryState)
     {
-        private readonly IPersistentState<RuuviTagRegistryState> _ruuviTagRegistry;
-        private IDisposable _timer;
+        _ruuviTagRegistry = ruuviTagRegistryState;
+    }
 
-        public RuuviTagRegistry([PersistentState(nameof(RuuviTagRegistryState), "RuuviStorage")]
-            IPersistentState<RuuviTagRegistryState> ruuviTagRegistryState)
-        {
-            _ruuviTagRegistry = ruuviTagRegistryState;
-        }
-
-        public override Task OnActivateAsync()
-        {
-            // Save last seen times hourly, they are not that important to save each time they are updated
-            _timer = RegisterTimer(SaveRegistryChanges, null, TimeSpan.FromHours(1), TimeSpan.FromHours(1));
+    public override Task OnActivateAsync(CancellationToken cancellationToken)
+    {
+        // Save last seen times hourly, they are not that important to save each time they are updated
+        _timer = RegisterTimer(SaveRegistryChanges, null, TimeSpan.FromHours(1), TimeSpan.FromHours(1));
             
-            return base.OnActivateAsync();
-        }
+        return Task.CompletedTask;
+    }
 
-        private async Task SaveRegistryChanges(object arg)
-        {
-            if (_ruuviTagRegistry.State.Dirty)
-            {
-                await SaveChanges();
-            }
-        }
+    public override async Task OnDeactivateAsync(DeactivationReason reason, CancellationToken cancellationToken)
+    {
+        _timer?.Dispose();
+        await SaveChanges();
+    }
 
-        public override async Task OnDeactivateAsync()
+    private async Task SaveRegistryChanges(object arg)
+    {
+        if (_ruuviTagRegistry.State.Dirty)
         {
-            _timer?.Dispose();
             await SaveChanges();
         }
+    }
 
-        public async Task AddOrUpdate(string macAddress, string name)
+    public async Task AddOrUpdate(string macAddress, string name)
+    {
+        if (_ruuviTagRegistry.State.RuuviTags.TryGetValue(macAddress, out var ruuviTagInfo))
         {
-            if (_ruuviTagRegistry.State.RuuviTags.TryGetValue(macAddress, out var ruuviTagInfo))
-            {
-                ruuviTagInfo.Name = name;
-                ruuviTagInfo.ModificationTime = DateTime.UtcNow;
-            }
-            else
-            {
-                _ruuviTagRegistry.State.RuuviTags[macAddress] = 
-                    new RuuviTagInfo
-                    {
-                        Name = name, 
-                        MacAddress = macAddress, 
-                        ModificationTime = DateTime.UtcNow
-                    };
-            }
-
-            await SaveChanges();
+            ruuviTagInfo.Name = name;
+            ruuviTagInfo.ModificationTime = DateTime.UtcNow;
+        }
+        else
+        {
+            _ruuviTagRegistry.State.RuuviTags[macAddress] = 
+                new RuuviTagInfo
+                {
+                    Name = name, 
+                    MacAddress = macAddress, 
+                    ModificationTime = DateTime.UtcNow
+                };
         }
 
-        private async Task SaveChanges()
-        {
-            _ruuviTagRegistry.State.LastSaved = DateTime.UtcNow;
-            _ruuviTagRegistry.State.Dirty = false;
-            await _ruuviTagRegistry.WriteStateAsync();
-        }
+        await SaveChanges();
+    }
 
-        public Task Refresh(string macAddress, DateTime? timestamp)
+    private async Task SaveChanges()
+    {
+        _ruuviTagRegistry.State.LastSaved = DateTime.UtcNow;
+        _ruuviTagRegistry.State.Dirty = false;
+        await _ruuviTagRegistry.WriteStateAsync();
+    }
+
+    public ValueTask Refresh(string macAddress, DateTime? timestamp)
+    {
+        if (_ruuviTagRegistry.State.RuuviTags.TryGetValue(macAddress, out var ruuviTagInfo))
         {
-            if (_ruuviTagRegistry.State.RuuviTags.TryGetValue(macAddress, out var ruuviTagInfo))
+            if (!timestamp.HasValue)
             {
-                if (!timestamp.HasValue)
-                {
-                    ruuviTagInfo.LastSeen = DateTime.UtcNow;
-                }
-                else if (!ruuviTagInfo.LastSeen.HasValue || timestamp > ruuviTagInfo.LastSeen.Value)
-                {
-                    ruuviTagInfo.LastSeen = timestamp;
-                }
+                ruuviTagInfo.LastSeen = DateTime.UtcNow;
             }
-            else
+            else if (!ruuviTagInfo.LastSeen.HasValue || timestamp > ruuviTagInfo.LastSeen.Value)
             {
-                _ruuviTagRegistry.State.RuuviTags[macAddress] = 
-                    new RuuviTagInfo
-                    {
-                        MacAddress = macAddress,
-                        Name = "Unknown",
-                        ModificationTime = DateTime.UtcNow,
-                        LastSeen = timestamp ?? DateTime.UtcNow
-                    };
+                ruuviTagInfo.LastSeen = timestamp;
             }
+        }
+        else
+        {
+            _ruuviTagRegistry.State.RuuviTags[macAddress] = 
+                new RuuviTagInfo
+                {
+                    MacAddress = macAddress,
+                    Name = "Unknown",
+                    ModificationTime = DateTime.UtcNow,
+                    LastSeen = timestamp ?? DateTime.UtcNow
+                };
+        }
             
-            _ruuviTagRegistry.State.Dirty = false;
-            return Task.CompletedTask;
-        }
+        _ruuviTagRegistry.State.Dirty = false;
+        return ValueTask.CompletedTask;
+    }
 
-        public Task<List<RuuviTagInfo>> GetAll()
-        {
-            return Task.FromResult(_ruuviTagRegistry.State.RuuviTags.Values.ToList());
-        }
+    public Task<List<RuuviTagInfo>> GetAll()
+    {
+        return Task.FromResult(_ruuviTagRegistry.State.RuuviTags.Values.ToList());
     }
 }

@@ -1,8 +1,7 @@
 ﻿using Orleans.Services;
 
-namespace net.jommy.RuuviCore.Interfaces
+namespace net.jommy.RuuviCore.Interfaces;
+
+public interface IRuuviDBusListener : IGrainService
 {
-    public interface IRuuviDBusListener : IGrainService
-    {
-    }
 }

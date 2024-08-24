@@ -1,0 +1,1 @@
+dotnet publish -a arm --os linux --output ..\releases\ruuvi-core --configuration Release --self-contained true

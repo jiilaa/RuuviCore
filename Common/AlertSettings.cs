@@ -1,9 +1,8 @@
 ﻿using System.Collections.Generic;
 
-namespace net.jommy.RuuviCore.Common
+namespace net.jommy.RuuviCore.Common;
+
+public class AlertSettings
 {
-    public class AlertSettings
-    {
-        public List<string> EndPoints { get; set; }
-    }
+    public List<string> EndPoints { get; set; }
 }

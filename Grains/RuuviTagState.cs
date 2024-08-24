@@ -14,7 +14,7 @@ public class RuuviTagState : IAzureAccessor
     public bool StoreAcceleration { get; set; }
     public bool StoreName { get; set; }
     public bool DiscardMinMaxValues { get; set; }
-    public List<Measurements> LatestMeasurements { get; set; }
+    public List<MeasurementDTO> LatestMeasurements { get; set; }
     public bool UseAzure { get; set; }
     public bool AllowMeasurementsThroughGateway { get; set; }
     public string AzurePrimaryKey { get; set; }
@@ -23,13 +23,10 @@ public class RuuviTagState : IAzureAccessor
 
     public short SignalStrength { get; set; }
 
-    public List<string> Bridges { get; set; }
-
     public IDictionary<string, AlertThresholds> AlertRules { get; set; }
 
     public RuuviTagState()
     {
         AlertRules = new Dictionary<string, AlertThresholds>();
-        Bridges = new List<string> { "default" };
     }
 }

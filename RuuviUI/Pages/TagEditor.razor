@@ -1,7 +1,6 @@
 ﻿@page "/edit/{tagId}"
 @using net.jommy.RuuviCore.Interfaces
 @using global::Orleans
-@using net.jommy.RuuviCore.Common
 @using InputType = BlazorStrap.InputType
 @using System.Globalization
 @inject IGrainFactory GrainFactory
@@ -33,7 +32,7 @@
         </div>
         <div Class="@BS.Form_Check @BS.Form_Switch">
             <BSInputCheckbox CheckedValue="@("on")" @bind-Value="StoreAcceleration"/>
-            <BSLabel IsCheckLabel="true">Store acceleration valies with measurement data</BSLabel>
+            <BSLabel IsCheckLabel="true">Store acceleration values with measurement data</BSLabel>
         </div>
         <div Class="@BS.Form_Check @BS.Form_Switch">
             <BSInputCheckbox CheckedValue="@("on")" @bind-Value="AllowMeasurementsThroughGateway"/>
@@ -61,7 +60,7 @@
     private string IncludeInDashboard { get; set; } = "on";
     private string DataSavingInterval { get; set; } = "60";
 
-    private RuuviTag RuuviTag { get; set; } = new ();
+    private RuuviTag RuuviTag { get; set; } = new RuuviTag();
 
     private string MacAddress { get; set; } = ""; 
 
@@ -69,7 +68,7 @@
     {
         if (TagId != "NewTag")
         {
-            RuuviTag = await GrainFactory.GetGrain<IRuuviTag>(Guid.Parse(TagId)).GetTag();
+            RuuviTag = await GrainFactory.GetGrain<IRuuviTag>(TagId).GetTag();
             StoreAcceleration = RuuviTag.StoreAcceleration ? "on" : "off";
             StoreName = RuuviTag.StoreName ? "on" : "off";
             DataSavingInterval = RuuviTag.DataSavingInterval.ToString(CultureInfo.InvariantCulture);
@@ -94,11 +93,11 @@
             RuuviTag.DataSavingInterval = int.Parse(DataSavingInterval);
             RuuviTag.IncludeInDashboard = IsOn(IncludeInDashboard);
             RuuviTag.DiscardMinMaxValues = IsOn(DiscardMinMaxValues);
-            await GrainFactory.GetGrain<IRuuviTag>(MacAddress.ToActorGuid()).Edit(RuuviTag);
+            await GrainFactory.GetGrain<IRuuviTag>(MacAddress).Edit(RuuviTag);
         }
         else
         {
-            await GrainFactory.GetGrain<IRuuviTag>(Guid.Parse(TagId)).Edit(RuuviTag);
+            await GrainFactory.GetGrain<IRuuviTag>(TagId).Edit(RuuviTag);
         }
 
         NavigationManager.NavigateTo("/taglist");

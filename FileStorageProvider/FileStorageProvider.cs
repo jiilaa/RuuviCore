@@ -1,78 +1,91 @@
-﻿using System;
-using System.IO;
+﻿using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using Orleans;
 using Orleans.Runtime;
 using Orleans.Storage;
 using System.Text.Json;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+using Orleans.Configuration;
 
-// https://dotnet.github.io/orleans/1.5/Tutorials/Custom-Storage-Providers.html
-namespace net.jommy.Orleans
+namespace net.jommy.Orleans;
+
+public class FileStorageProvider : IGrainStorage, ILifecycleParticipant<ISiloLifecycle>
 {
-    public class FileStorageProvider : IGrainStorage, ILifecycleParticipant<ISiloLifecycle>
+    private readonly FileStorageProviderOptions _options;
+    private readonly JsonSerializerOptions _jsonSerializerOptions = new() { WriteIndented = true, PropertyNamingPolicy = JsonNamingPolicy.CamelCase};
+    private readonly string _name;
+    private readonly string _serviceId;
+
+    public FileStorageProvider(IOptions<FileStorageProviderOptions> options)
     {
-        private readonly FileStorageProviderOptions _options;
-        private readonly JsonSerializerOptions _jsonSerializerOptions = new JsonSerializerOptions { WriteIndented = true };
+        _options = options.Value;
+        _serviceId = _options.ServiceId;
+        _name = _options.Name;
+    }
 
-        public FileStorageProvider(FileStorageProviderOptions options)
+    public async Task ReadStateAsync<T>(string stateName, GrainId grainId, IGrainState<T> grainState)
+    {
+        var fileInfo = new FileInfo(GetFilePath(grainId));
+
+        if (!fileInfo.Exists)
         {
-            _options = options;
+            return;
         }
 
-        public async Task ReadStateAsync(string grainType, GrainReference grainReference, IGrainState grainState)
+        using var stream = fileInfo.OpenText();
+        var storedData = await stream.ReadToEndAsync();
+
+        grainState.State = JsonSerializer.Deserialize<T>(storedData, _jsonSerializerOptions);
+        grainState.ETag = fileInfo.LastWriteTimeUtc.Ticks.ToString();
+    }
+
+    /// <inheritdoc />
+    public async Task WriteStateAsync<T>(string stateName, GrainId grainId, IGrainState<T> grainState)
+    {
+        var storedData = JsonSerializer.Serialize(grainState.State, _jsonSerializerOptions);
+        var fileInfo = new FileInfo(GetFilePath(grainId));
+        if (fileInfo.Exists && fileInfo.LastWriteTimeUtc.Ticks.ToString() != grainState.ETag)
         {
-            var fileInfo = new FileInfo(GetFilePath(grainType, grainReference.GetPrimaryKey()));
-
-            if (!fileInfo.Exists)
-            {
-                return;
-            }
-
-            using var stream = fileInfo.OpenText();
-            var storedData = await stream.ReadToEndAsync();
-
-            grainState.State = JsonSerializer.Deserialize(storedData, grainState.State.GetType());
+            throw new InconsistentStateException(
+                $"Version conflict (WriteState): ServiceId={_serviceId} " +
+                $"ProviderName={_name} GrainType={grainId.Type} " +
+                $"GrainReference={grainId.ToString()}.");
         }
 
-        public async Task WriteStateAsync(string grainType, GrainReference grainReference, IGrainState grainState)
-        {
-            var storedData = JsonSerializer.Serialize(grainState.State, _jsonSerializerOptions);
+        await using var stream = new StreamWriter(fileInfo.Open(FileMode.Create,FileAccess.Write));
+        await stream.WriteAsync(storedData);
+    }
 
-            var fileInfo = new FileInfo(GetFilePath(grainType, grainReference.GetPrimaryKey()));
+    private string GetFilePath(GrainId grainId)
+    {
+        // grainType should contain a fully qualified name of a class. It is way too long for a file name, so just use the classname part. 
+        // if (grainType.Contains("."))
+        // {
+        //     grainType = grainType.Substring(grainType.LastIndexOf(".", StringComparison.InvariantCulture)+1);
+        // }
+        return Path.Combine(_options.Directory, $"{grainId.Type}_{grainId.Key}.json");
+    }
 
-            await using var stream = new StreamWriter(fileInfo.Open(FileMode.Create,FileAccess.Write));
-            await stream.WriteAsync(storedData);
-        }
+    /// <inheritdoc />
+    public Task ClearStateAsync<T>(string stateName, GrainId grainId, IGrainState<T> grainState)
+    {
+        var fileInfo = new FileInfo(GetFilePath(grainId));
+        fileInfo.Delete();
+        return Task.CompletedTask;        
+    }
 
-        private string GetFilePath(string grainType, Guid grainPrimaryKey)
-        {
-            // grainType should contain a fully qualified name of a class. It is way too long for a file name, so just use the classname part. 
-            if (grainType.Contains("."))
-            {
-                grainType = grainType.Substring(grainType.LastIndexOf(".", StringComparison.InvariantCulture)+1);
-            }
-            return Path.Combine(_options.Directory, $"{grainType}_{grainPrimaryKey}.json");
-        }
+    public void Participate(ISiloLifecycle lifecycle)
+    {
+        lifecycle.Subscribe<FileStorageProvider>(ServiceLifecycleStage.ApplicationServices, Init);
+    }
 
-        public Task ClearStateAsync(string grainType, GrainReference grainReference, IGrainState grainState)
-        {
-            var fileInfo = new FileInfo(GetFilePath(grainType, grainReference.GetPrimaryKey()));
-            fileInfo.Delete();
-            return Task.CompletedTask;
-        }
-
-        public void Participate(ISiloLifecycle lifecycle)
-        {
-            lifecycle.Subscribe<FileStorageProvider>(ServiceLifecycleStage.ApplicationServices, Init);
-        }
-
-        private Task Init(CancellationToken ct)
-        {
-            var directory = new DirectoryInfo(_options.Directory);
-            if (!directory.Exists)
-                directory.Create();
-            return Task.CompletedTask;
-        }
+    private Task Init(CancellationToken ct)
+    {
+        var directory = new DirectoryInfo(_options.Directory);
+        if (!directory.Exists)
+            directory.Create();
+        return Task.CompletedTask;
     }
 }

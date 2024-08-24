@@ -1,0 +1,13 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net7.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Append.Blazor.Notifications" Version="1.1.0" />
+        <PackageReference Include="BlazorStrap" Version="5.2.100-Preview3b" />
+    </ItemGroup>
+</Project>

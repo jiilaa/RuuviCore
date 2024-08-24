@@ -1,8 +1,7 @@
-namespace net.jommy.RuuviCore.Grains
+namespace net.jommy.RuuviCore.Grains;
+
+public interface IAzureAccessor
 {
-    public interface IAzureAccessor
-    {
-        public string AzurePrimaryKey { get; }
-        public string AzureScopeId { get; }
-    }
+    public string AzurePrimaryKey { get; }
+    public string AzureScopeId { get; }
 }

@@ -1,9 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Tasks;
 using InfluxDB.Collector;
 using InfluxDB.Collector.Diagnostics;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using net.jommy.RuuviCore.Common;
 using net.jommy.RuuviCore.Interfaces;
 using Orleans;
@@ -15,19 +17,17 @@ namespace net.jommy.RuuviCore.Grains;
 public class InfluxBridge : Grain, IInfluxBridge
 {
     private MetricsCollector _metricsCollector;
-    private InfluxSettings _influxSettings;
-    private readonly IInfluxSettingsFactory _influxSettingsFactory;
+    private readonly InfluxSettings _influxSettings;
     private readonly ILogger<InfluxBridge> _logger;
 
-    public InfluxBridge(IInfluxSettingsFactory influxSettingsFactory, ILogger<InfluxBridge> logger)
+    public InfluxBridge(IOptions<InfluxSettings> influxOptions, ILogger<InfluxBridge> logger)
     {
-        _influxSettingsFactory = influxSettingsFactory;
+        _influxSettings = influxOptions.Value;
         _logger = logger;
     }
 
-    public override Task OnActivateAsync()
+    public override Task OnActivateAsync(CancellationToken cancellationToken)
     {
-        _influxSettings = _influxSettingsFactory.GetSettings(this.GetPrimaryKeyString());
         _metricsCollector = new CollectorConfiguration()
             .Batch.AtInterval(TimeSpan.FromSeconds(2))
             .WriteTo.InfluxDB(_influxSettings.InfluxAddress, _influxSettings.InfluxDatabase, _influxSettings.Username, _influxSettings.Password)
@@ -37,10 +37,10 @@ public class InfluxBridge : Grain, IInfluxBridge
             _logger.LogError(exception, "Error when activating bridge to influx: {errorMessage}", message);
         });
             
-        return base.OnActivateAsync();
+        return Task.CompletedTask;
     }
 
-    public Task<bool> WriteMeasurements(string macAddress, string name, Measurements measurements)
+    public Task<bool> WriteMeasurements(string macAddress, string name, MeasurementDTO measurements)
     {
         try
         {
@@ -65,10 +65,5 @@ public class InfluxBridge : Grain, IInfluxBridge
         }
 
         return Task.FromResult(true);
-    }
-
-    public Task<bool> IsValid()
-    {
-        return Task.FromResult(_influxSettings.BridgeName == this.GetPrimaryKeyString());
     }
 }
