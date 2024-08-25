@@ -23,23 +23,23 @@ public class RuuviTagRegistry : Grain, IRuuviTagRegistry
     public override Task OnActivateAsync(CancellationToken cancellationToken)
     {
         // Save last seen times hourly, they are not that important to save each time they are updated
-        _timer = RegisterTimer(SaveRegistryChanges, null, TimeSpan.FromHours(1), TimeSpan.FromHours(1));
+        _timer = this.RegisterGrainTimer<object>(SaveRegistryChangesAsync, null, TimeSpan.FromHours(1), TimeSpan.FromHours(1));
             
         return Task.CompletedTask;
+    }
+
+    private async Task SaveRegistryChangesAsync(object state, CancellationToken cancellationToken)
+    {
+        if (_ruuviTagRegistry.State.Dirty)
+        {
+            await SaveChanges();
+        }
     }
 
     public override async Task OnDeactivateAsync(DeactivationReason reason, CancellationToken cancellationToken)
     {
         _timer?.Dispose();
         await SaveChanges();
-    }
-
-    private async Task SaveRegistryChanges(object arg)
-    {
-        if (_ruuviTagRegistry.State.Dirty)
-        {
-            await SaveChanges();
-        }
     }
 
     public async Task AddOrUpdate(string macAddress, string name)

@@ -20,6 +20,7 @@ namespace net.jommy.RuuviCore.GrainServices;
 [Reentrant]
 public class DBusListener : GrainService, IRuuviDBusListener
 {
+    private readonly IGrainFactory _grainFactory;
     private const string DBusServiceName = "org.bluez";
     private const string DBusDeviceInterfaceName = "org.bluez.Device1";
     private readonly IDictionary<string, IDeviceListener> _deviceListeners = new ConcurrentDictionary<string, IDeviceListener>();
@@ -33,6 +34,7 @@ public class DBusListener : GrainService, IRuuviDBusListener
     public DBusListener(GrainId grainId, Silo silo, ILoggerFactory loggerFactory, IGrainFactory grainFactory, IOptions<DBusSettings> dbusOptions) 
         : base(grainId, silo, loggerFactory)
     {
+        _grainFactory = grainFactory;
         _dbusSettings = dbusOptions.Value;
         _deviceListenerFactory = new DeviceListenerFactory(grainFactory, loggerFactory);
         _logger = loggerFactory.CreateLogger<DBusListener>();
@@ -61,6 +63,15 @@ public class DBusListener : GrainService, IRuuviDBusListener
 
     private async void MainLoop()
     {
+        if (_dbusSettings.BluetoothAdapterName == DBusSettings.SimulatedAdapterName)
+        {
+            _logger.LogInformation("Simulating Ruuvi DBUS Listener");
+            foreach (var simulatedDevice in _dbusSettings.SimulatedDevices)
+            {
+                await _grainFactory.GetGrain<ISimulatedTag>(simulatedDevice).Start();
+            }
+            return;
+        }
         _logger.LogInformation("Starting Ruuvi DBUS Listener");
 
         try
@@ -176,5 +187,16 @@ public class DBusListener : GrainService, IRuuviDBusListener
         {
             _logger.LogDebug("Discarding a bluetooth device without manufacturer data.");
         }            
+    }
+
+    public async Task SimulateEvent(string macAddress)
+    {
+        await _grainFactory.GetGrain<IRuuviTag>(macAddress).ReceiveMeasurements(
+            new MeasurementEnvelope
+            {
+                Timestamp = DateTime.UtcNow,
+                SignalStrength = (short)Random.Shared.Next(),
+                Data = null
+            });
     }
 }

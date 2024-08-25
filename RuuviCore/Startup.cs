@@ -1,9 +1,14 @@
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using net.jommy.RuuviCore.Common;
 using net.jommy.RuuviCore.Gateway.Utilities;
+using net.jommy.RuuviCore.GrainServices;
+using net.jommy.RuuviCore.Interfaces;
 using net.jommy.RuuviCore.Services;
 
 namespace net.jommy.RuuviCore;
@@ -23,9 +28,22 @@ public class Startup
     {
         services.AddRazorPages();
         services.AddServerSideBlazor();
-//        services.AddNotifications();
-        services.AddSingleton<IRuuviTagRepository, RuuviTagRepository>();
+
+        var jsonSerializerOptions = new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+            WriteIndented = true
+        };
+        services.AddSingleton(jsonSerializerOptions);
+        
+        services.AddSingleton<IRuuviTagRepository, RuuviTagRepository>()
+            .AddSingleton<IDBusListenerClient, DBusListenerClient>();
+
         services.Configure<RestApiOptions>(Configuration.GetSection("APISettings"));
+        services.Configure<DBusSettings>(Configuration.GetSection("DBusSettings"));
+        services.Configure<InfluxSettings>(Configuration.GetSection("InfluxSettings"));
+
         services
             .AddControllers()
             .AddJsonOptions(options =>
@@ -34,6 +52,8 @@ public class Startup
                 // i.e. the timezone is in format +0200 instead of +02:00
                 // So add a fallback to deserialize datetime strings using DateTime 
                 options.JsonSerializerOptions.Converters.Add(new DateTimeConverterUsingDateTimeParseAsFallback());
+                options.JsonSerializerOptions.WriteIndented = true;
+                options.JsonSerializerOptions.DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull;
             });
     }
 

@@ -8,6 +8,6 @@
 
     <ItemGroup>
         <PackageReference Include="Append.Blazor.Notifications" Version="1.1.0" />
-        <PackageReference Include="BlazorStrap" Version="5.2.100-Preview3b" />
+        <PackageReference Include="BlazorStrap" Version="5.2.101" />
     </ItemGroup>
 </Project>

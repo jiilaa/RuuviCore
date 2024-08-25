@@ -1,9 +1,12 @@
-﻿FROM mcr.microsoft.com/dotnet/aspnet:8.0.100-1-bookworm-slim-arm32v7 AS base
+﻿FROM mcr.microsoft.com/dotnet/aspnet:8.0-bookworm-slim-arm32v7 AS base
+
+USER app
 WORKDIR /app
-EXPOSE 80
+
+EXPOSE 8080
 EXPOSE 443
 
-FROM mcr.microsoft.com/dotnet/sdk:8.0.100-1-bookworm-slim-arm32v7 AS build
+FROM mcr.microsoft.com/dotnet/sdk:8.0-bookworm-slim-arm32v7 AS build
 WORKDIR /src
 COPY ["RuuviCore/RuuviCore.csproj", "RuuviCore/"]
 COPY ["Common/Common.csproj", "Common/"]
@@ -22,4 +25,5 @@ RUN dotnet publish "RuuviCore.csproj" -c Release -o /app/publish
 FROM base AS final
 WORKDIR /app
 COPY --from=publish /app/publish .
+
 ENTRYPOINT ["dotnet", "ruuvi-core.dll"]

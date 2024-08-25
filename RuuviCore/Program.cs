@@ -59,10 +59,12 @@ public class Program
             .AddJsonFile("appsettings.json", false, false).Build();
 
         var hostBuilder = Host.CreateDefaultBuilder()
-            .ConfigureAppConfiguration((_, config) =>
-            {
-                config.AddJsonFile("appsettings.json", true, true);
-            })
+            // .ConfigureAppConfiguration((ctx, config) =>
+            // {
+            //     var environment = ctx.HostingEnvironment;
+            //     config.AddJsonFile("appsettings.json", true, true);
+            //     config.AddJsonFile($"appsettings.{environment.EnvironmentName}.json", true, true);
+            // })
             .UseSerilog((_, loggerConfiguration) =>
             {
                 loggerConfiguration
@@ -108,22 +110,12 @@ public class Program
 
     private static void ConfigureOrleans(ISiloBuilder siloHostBuilder, IConfiguration configuration)
     {
+        siloHostBuilder.Configure<FileGrainStorageOptions>(options => options.RootDirectory = "RuuviTags");
         siloHostBuilder
             .UseLocalhostClustering(serviceId: "RuuviCore", clusterId: "rc")
-            .Configure<FileStorageProviderOptions>(options => options.Directory = "RuuviTags")
-            .ConfigureServices(services =>
-            {
-                services.Configure<DBusSettings>(configuration.GetSection("DBusSettings"));
-                services.Configure<InfluxSettings>(configuration.GetSection("InfluxSettings"));
-            })
             .AddGrainService<DBusListener>()
-            .AddFileStorageGrainStorage(RuuviCoreConstants.GrainStorageName,
-                options =>
-                {
-                    options.Directory = "RuuviTags";
-                    options.ServiceId = "RuuviCore";
-                    options.Name = "RuuviCoreConstants.GrainStorageName";
-                });
+            .AddJsonFileGrainStorage(RuuviCoreConstants.GrainStorageName,
+                options => { options.RootDirectory = "RuuviTags"; });
     }
 
     private static Action<ILoggingBuilder> ConfigureLogging()
