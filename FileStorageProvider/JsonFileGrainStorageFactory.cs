@@ -15,7 +15,6 @@ internal static class JsonFileGrainStorageFactory
 
         return ActivatorUtilities.CreateInstance<JsonFileGrainStorage>(
             services,
-            name,
             optionsMonitor.Get(name),
             services.GetProviderClusterOptions(name),
             services.GetRequiredService<JsonSerializerOptions>());

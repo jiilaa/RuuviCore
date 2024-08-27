@@ -109,6 +109,7 @@ public class DBusListener : GrainService, IRuuviDBusListener
 
     private void OnPropertyChanges(PropertyChanges obj)
     {
+        _logger.LogInformation("DBUS property change: {propertyChanges}", obj);
         // TODO: This is probably no longer needed, test if DBUS listening works without this.  
     }
 
@@ -128,6 +129,8 @@ public class DBusListener : GrainService, IRuuviDBusListener
 
     private async Task RegisterDevice(ObjectPath objectPath)
     {
+        _logger.LogInformation("Registering device: {objectPath}", objectPath);
+        
         var device = Connection.System.CreateProxy<IDevice1>(DBusServiceName, objectPath);
         IDictionary<ushort, object> manufacturerData;
         try

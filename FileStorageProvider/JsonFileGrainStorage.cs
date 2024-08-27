@@ -15,12 +15,10 @@ public sealed class JsonFileGrainStorage : IGrainStorage
 {
     private readonly FileGrainStorageOptions _options;
     private readonly ClusterOptions _clusterOptions;
-    private readonly string _storageProviderName;
     private readonly JsonSerializerOptions _jsonSerializerOptions;
 
-    public JsonFileGrainStorage(string name, FileGrainStorageOptions options, IOptions<ClusterOptions> clusterOptions, JsonSerializerOptions jsonSerializerOptions)
+    public JsonFileGrainStorage(FileGrainStorageOptions options, IOptions<ClusterOptions> clusterOptions, JsonSerializerOptions jsonSerializerOptions)
     {
-        _storageProviderName = name;
         _options = options;
         _clusterOptions = clusterOptions.Value;
         _jsonSerializerOptions = jsonSerializerOptions;
@@ -52,7 +50,7 @@ public sealed class JsonFileGrainStorage : IGrainStorage
 
     public async Task WriteStateAsync<T>(string stateName, GrainId grainId, IGrainState<T> grainState)
     {
-        var storedData = JsonSerializer.Serialize(grainState.State, _jsonSerializerOptions); //_options.GrainStorageSerializer.Serialize(grainState.State));
+        var storedData = JsonSerializer.Serialize(grainState.State, _jsonSerializerOptions);
         var fName = GetKeyString(stateName, grainId);
         var path = Path.Combine(_options.RootDirectory, fName!);
         var fileInfo = new FileInfo(path);
@@ -71,5 +69,11 @@ public sealed class JsonFileGrainStorage : IGrainStorage
     }
 
     private string GetKeyString(string grainType, GrainId grainId) =>
-        $"{_clusterOptions.ServiceId}.{grainId.Key}.{grainType}.json";
+        $"{_clusterOptions.ServiceId}.{Normalize(grainId.Key)}.{grainType}.json";
+
+    private static string Normalize(IdSpan id)
+    {
+        var idString = id.ToString();
+        return idString.Replace('/', '_').Replace('\\', '_').Replace(':', '_');
+    }
 }

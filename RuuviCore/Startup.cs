@@ -29,14 +29,6 @@ public class Startup
         services.AddRazorPages();
         services.AddServerSideBlazor();
 
-        var jsonSerializerOptions = new JsonSerializerOptions
-        {
-            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-            WriteIndented = true
-        };
-        services.AddSingleton(jsonSerializerOptions);
-        
         services.AddSingleton<IRuuviTagRepository, RuuviTagRepository>()
             .AddSingleton<IDBusListenerClient, DBusListenerClient>();
 

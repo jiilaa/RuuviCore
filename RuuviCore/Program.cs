@@ -3,6 +3,8 @@ using System.Linq;
 using System.Net;
 using System.Reflection;
 using System.Security.Cryptography.X509Certificates;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Configuration;
@@ -59,17 +61,21 @@ public class Program
             .AddJsonFile("appsettings.json", false, false).Build();
 
         var hostBuilder = Host.CreateDefaultBuilder()
-            // .ConfigureAppConfiguration((ctx, config) =>
-            // {
-            //     var environment = ctx.HostingEnvironment;
-            //     config.AddJsonFile("appsettings.json", true, true);
-            //     config.AddJsonFile($"appsettings.{environment.EnvironmentName}.json", true, true);
-            // })
+            .ConfigureServices((_, services) =>
+            {
+                var jsonSerializerOptions = new JsonSerializerOptions
+                {
+                    PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+                    DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+                    WriteIndented = true
+                };
+                services.AddSingleton(jsonSerializerOptions);
+            })
             .UseSerilog((_, loggerConfiguration) =>
             {
                 loggerConfiguration
                     .WriteTo.Console()
-                    .MinimumLevel.Information()
+//                    .MinimumLevel.Information()
                     .MinimumLevel.Override("Orleans", LogEventLevel.Error)
                     .MinimumLevel.Override("Microsoft.Orleans", LogEventLevel.Error)
                     .MinimumLevel.Override("Microsoft.AspNetCore.Hosting.Diagnostics", LogEventLevel.Error);
