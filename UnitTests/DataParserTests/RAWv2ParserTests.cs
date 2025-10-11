@@ -1,6 +1,6 @@
 using System;
 using System.IO;
-using FluentAssertions;
+using AwesomeAssertions;
 using net.jommy.RuuviCore.Grains.DataParsers;
 using net.jommy.RuuviCore.Interfaces;
 using NUnit.Framework;

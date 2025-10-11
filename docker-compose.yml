@@ -5,8 +5,13 @@ services:
     image: ruuvicore:latest
     environment:
     - "ListeningSettings__HttpEnabled=true"
+    - "DBUS_SESSION_BUS_ADDRESS=unix:path=/run/dbus/system_bus_socket"
+    volumes:
+    - /var/run/dbus:/var/run/dbus:ro
+    - /run/dbus:/run/dbus:ro
+    privileged: true
     restart: always
-    networks: 
+    networks:
     - host
     
 networks:

@@ -1,13 +1,13 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework>net9.0</TargetFramework>
     <RootNamespace>net.jommy.Orleans</RootNamespace>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.Orleans.Runtime" Version="8.2.0" />
-    <PackageReference Include="Microsoft.Orleans.Sdk" Version="8.2.0" />
+    <PackageReference Include="Microsoft.Orleans.Runtime" Version="9.2.1" />
+    <PackageReference Include="Microsoft.Orleans.Sdk" Version="9.2.1" />
   </ItemGroup>
 
 </Project>

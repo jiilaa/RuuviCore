@@ -1,16 +1,16 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework>net9.0</TargetFramework>
     <RootNamespace>net.jommy.RuuviCore.GrainServices</RootNamespace>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.Orleans.Runtime" Version="8.2.0" />
-    <PackageReference Include="Microsoft.Orleans.Sdk" Version="8.2.0" />
-    <PackageReference Include="Serilog" Version="4.0.1" />
+    <PackageReference Include="Microsoft.Orleans.Runtime" Version="9.2.1" />
+    <PackageReference Include="Microsoft.Orleans.Sdk" Version="9.2.1" />
+    <PackageReference Include="Serilog" Version="4.3.0" />
     <PackageReference Include="Serilog.Sinks.Console" Version="6.0.0" />
-    <PackageReference Include="Tmds.DBus" Version="0.20.0" />
+    <PackageReference Include="Tmds.DBus" Version="0.21.2" />
   </ItemGroup>
 
   <ItemGroup>
