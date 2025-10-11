@@ -1,0 +1,36 @@
+# Use pre-built runtime image directly
+FROM mcr.microsoft.com/dotnet/aspnet:9.0-bookworm-slim-arm32v7 AS final
+
+# Install required libraries for Bluetooth/D-Bus support
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        dbus \
+        bluez && \
+    rm -rf /var/lib/apt/lists/*
+
+# Create non-root user for security
+RUN groupadd -g 1000 ruuviapp && \
+    useradd -r -u 1000 -g ruuviapp ruuviapp && \
+    usermod -aG bluetooth ruuviapp
+
+WORKDIR /app
+
+# Copy pre-built application (built on host)
+COPY ./publish/ .
+
+# Set ownership
+RUN chown -R ruuviapp:ruuviapp /app
+
+# Set environment variables
+ENV DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=false \
+    DOTNET_RUNNING_IN_CONTAINER=true \
+    ASPNETCORE_URLS=http://+:8080 \
+    ASPNETCORE_ENVIRONMENT=Production
+
+# Switch to non-root user
+USER ruuviapp
+
+EXPOSE 8080
+EXPOSE 443
+
+ENTRYPOINT ["dotnet", "ruuvi-core.dll"]

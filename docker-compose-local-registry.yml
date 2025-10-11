@@ -1,0 +1,19 @@
+version: '3'
+services:
+  ruuvicore:
+    container_name: ruuvi-core
+    image: localhost:5000/ruuvicore:latest  # Pull from local registry
+    environment:
+    - "ListeningSettings__HttpEnabled=true"
+    - "DBUS_SESSION_BUS_ADDRESS=unix:path=/run/dbus/system_bus_socket"
+    volumes:
+    - /var/run/dbus:/var/run/dbus:ro
+    - /run/dbus:/run/dbus:ro
+    privileged: true
+    restart: always
+    networks:
+    - host
+
+networks:
+  host:
+    external: true
