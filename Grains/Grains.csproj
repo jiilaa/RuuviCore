@@ -9,8 +9,6 @@
     <PackageReference Include="InfluxDB.Collector" Version="1.1.1" />
     <PackageReference Include="Microsoft.Orleans.Runtime" Version="9.2.1" />
     <PackageReference Include="Microsoft.Orleans.Sdk" Version="9.2.1" />
-    <PackageReference Include="Serilog" Version="4.3.0" />
-    <PackageReference Include="Serilog.Sinks.Console" Version="6.0.0" />
   </ItemGroup>
 
   <ItemGroup>

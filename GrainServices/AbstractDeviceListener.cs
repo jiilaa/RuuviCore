@@ -1,22 +1,20 @@
 using System;
-using System.Collections;
 using System.Collections.Generic;
-using System.Linq;
 using System.Threading.Tasks;
-using bluez.DBus;
 using Microsoft.Extensions.Logging;
+using net.jommy.RuuviCore.Bluez.Models;
+using net.jommy.RuuviCore.Bluez.Objects;
 using Orleans;
-using Tmds.DBus;
+using Tmds.DBus.Protocol;
 
 namespace net.jommy.RuuviCore.GrainServices;
 
 public abstract class AbstractDeviceListener : IDeviceListener
 {
-    private const int AliveThreshold = 60; 
-    private const string SignalStrengthKeyName = "RSSI";
+    private const int AliveThreshold = 60;
     private const string ManufacturerDataKeyName = "ManufacturerData";
 
-    private readonly IDevice1 _device;
+    private readonly Device _device;
     private IDisposable _propertiesWatcher;
     private int _aliveCounter;
 
@@ -30,7 +28,7 @@ public abstract class AbstractDeviceListener : IDeviceListener
         
     protected abstract ushort ManufacturerKey { get; }
 
-    protected AbstractDeviceListener(IDevice1 device, string deviceAddress, IGrainFactory grainFactory, ILogger logger)
+    protected AbstractDeviceListener(Device device, string deviceAddress, IGrainFactory grainFactory, ILogger logger)
     {
         _device = device;
         DeviceAddress = deviceAddress;
@@ -49,7 +47,7 @@ public abstract class AbstractDeviceListener : IDeviceListener
     public async Task StartListeningAsync()
     {
         await OnStartListening();
-        _propertiesWatcher = await _device.WatchPropertiesAsync(OnPropertiesChanged);
+        _propertiesWatcher = await _device.WatchPropertiesChangedAsync(OnPropertiesChanged);
     }
 
     public bool IsAlive()
@@ -60,38 +58,50 @@ public abstract class AbstractDeviceListener : IDeviceListener
 
     private Task<short> GetSignalStrength()
     {
-        return _device.GetAsync<short>(SignalStrengthKeyName);
+        return _device.GetRSSIAsync();
     }
 
-    public async Task HandleDataAsync(IDictionary<ushort, object> manufacturerData)
+    public async Task HandleDataAsync(Dictionary<ushort, VariantValue> manufacturerData)
     {
-        if (manufacturerData.TryGetValue(ManufacturerKey, out var bytes))
+        if (manufacturerData.TryGetValue(ManufacturerKey, out var variantValue))
         {
-            await HandlePropertiesChanged((byte[])bytes, null);
+            var bytes = variantValue.GetArray<byte>();
+            var signalStrength = await GetSignalStrength();
+            await HandlePropertiesChanged(bytes, signalStrength);
         }
     }
 
-    private async void OnPropertiesChanged(PropertyChanges changes)
+    private async void OnPropertiesChanged(Exception ex, PropertyChanges<DeviceProperties> changes)
     {
-        _aliveCounter = 0;
+        // Async void is a big no-no, but Tmds.DBus doesn't provide a Task based way to do this,
+        // so pokemon-catch all exceptions to avoid crashing the whole application
+
         try
         {
-            var manufacturerDataChange = changes.Changed.FirstOrDefault(c => c.Key == ManufacturerDataKeyName);
-            if (manufacturerDataChange.Value == null)
+            if (ex != null)
+            {
+                _logger.LogError(ex, "Error in property change for device {DeviceAddress}: {ErrorMessage}", DeviceAddress, ex.Message);
+                return;
+            }
+
+            _aliveCounter = 0;
+            // Check if ManufacturerData property changed
+            if (!changes.HasChanged(ManufacturerDataKeyName))
             {
                 return;
             }
 
-            var dict = (IDictionary)manufacturerDataChange.Value;
-            if (dict.Contains(ManufacturerKey))
+            var manufacturerData = changes.Properties.ManufacturerData;
+            if (manufacturerData != null && manufacturerData.TryGetValue(ManufacturerKey, out var variantValue))
             {
                 var signalStrength = await GetSignalStrength();
-                await HandlePropertiesChanged((byte[]) dict[ManufacturerKey], signalStrength);
+                var bytes = variantValue.GetArray<byte>();
+                await HandlePropertiesChanged(bytes, signalStrength);
             }
         }
         catch (Exception e)
         {
-            _logger.LogError("Failed to handle properties changed event for device {deviceAddress}: {error}", DeviceAddress, e.Message);
+            _logger.LogError("Failed to handle properties changed event for device {DeviceAddress}: {Error}", DeviceAddress, e.Message);
         }
     }
 }

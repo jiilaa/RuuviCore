@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Threading.Tasks;
-using bluez.DBus;
 using Microsoft.Extensions.Logging;
+using net.jommy.RuuviCore.Bluez.Objects;
 using net.jommy.RuuviCore.Interfaces;
 using Orleans;
 
@@ -15,7 +15,7 @@ public class RuuviTagListener : AbstractDeviceListener
 
     protected override ushort ManufacturerKey => RuuviManufacturerDataKey;
 
-    public RuuviTagListener(IDevice1 device, string deviceAddress, IGrainFactory grainFactory, ILogger<RuuviTagListener> logger)
+    public RuuviTagListener(Device device, string deviceAddress, IGrainFactory grainFactory, ILogger<RuuviTagListener> logger)
         : base(device, deviceAddress, grainFactory, logger)
     {
         _logger = logger;
@@ -24,7 +24,7 @@ public class RuuviTagListener : AbstractDeviceListener
 
     protected override async Task HandlePropertiesChanged(byte[] manufacturerData, short? signalStrength)
     {
-        _logger.LogDebug("Publishing ruuvi data to ruuvi actor {MAC}", DeviceAddress);
+        _logger.LogDebug("Publishing ruuvi data to ruuvi actor {Mac}", DeviceAddress);
         await GrainFactory.GetGrain<IRuuviTag>(DeviceAddress).ReceiveMeasurements(
             new MeasurementEnvelope
             {
@@ -40,11 +40,11 @@ public class RuuviTagListener : AbstractDeviceListener
         var name = await ruuviTag.GetName();
         if (name != null)
         {
-            _logger.LogInformation("Listening ruuvitag {name} ({mac}).", name, DeviceAddress);
+            _logger.LogInformation("Listening RuuviTag {Name} ({Mac}).", name, DeviceAddress);
         }
         else
         {
-            _logger.LogInformation("New RuuviTag {alias} found.", DeviceAddress);
+            _logger.LogInformation("New RuuviTag {Alias} found.", DeviceAddress);
         }
     }
 }

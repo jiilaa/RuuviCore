@@ -12,14 +12,11 @@ using Microsoft.Extensions.Hosting;
 using net.jommy.Orleans;
 using net.jommy.RuuviCore.Common;
 using net.jommy.RuuviCore.GrainServices;
-using Serilog;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using Orleans.Configuration;
 using Orleans.Hosting;
-using Orleans.Providers;
-using Serilog.Events;
+using BlazorStrap;
 
 namespace net.jommy.RuuviCore;
 
@@ -71,18 +68,19 @@ public class Program
                 };
                 services.AddSingleton(jsonSerializerOptions);
             })
-            .UseSerilog((_, loggerConfiguration) =>
-            {
-                loggerConfiguration
-                    .WriteTo.Console()
-//                    .MinimumLevel.Information()
-                    .MinimumLevel.Override("Orleans", LogEventLevel.Error)
-                    .MinimumLevel.Override("Microsoft.Orleans", LogEventLevel.Error)
-                    .MinimumLevel.Override("Microsoft.AspNetCore.Hosting.Diagnostics", LogEventLevel.Error);
-            })
+
+//             .UseSerilog((_, loggerConfiguration) =>
+//             {
+//                 loggerConfiguration
+//                     .WriteTo.Console()
+// //                    .MinimumLevel.Information()
+//                     .MinimumLevel.Override("Orleans", LogEventLevel.Error)
+//                     .MinimumLevel.Override("Microsoft.Orleans", LogEventLevel.Error)
+//                     .MinimumLevel.Override("Microsoft.AspNetCore.Hosting.Diagnostics", LogEventLevel.Error);
+//             })
             .UseOrleans(siloBuilder => ConfigureOrleans(siloBuilder, configuration))
             .ConfigureLogging(ConfigureLogging())
-//            .ConfigureServices(collection => collection.AddBlazorStrap())
+            .ConfigureServices(collection => collection.AddBlazorStrap())
             .UseConsoleLifetime(options => options.SuppressStatusMessages = true)
             .ConfigureHostOptions(options => options.ShutdownTimeout = TimeSpan.FromSeconds(30));
 
@@ -129,7 +127,7 @@ public class Program
         return builder =>
         {
             builder
-                .AddSerilog()
+                .AddConsole()
                 .AddFilter("Orleans", LogLevel.Warning)
                 .AddFilter("Orleans.Runtime.NoOpHostEnvironmentStatistics", LogLevel.Error)
                 .AddFilter("Orleans.Runtime.MembershipService", LogLevel.Error)

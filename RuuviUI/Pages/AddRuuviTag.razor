@@ -1,0 +1,289 @@
+@page "/add-tag"
+@using net.jommy.RuuviCore.Interfaces
+@using global::Orleans
+@using System.Text.RegularExpressions
+@inject IGrainFactory GrainFactory
+@inject NavigationManager NavigationManager
+@inject IJSRuntime JSRuntime
+
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card shadow">
+                <div class="card-header bg-primary text-white">
+                    <h3 class="mb-0">
+                        <i class="oi oi-plus"></i> Add New Ruuvi Tag
+                    </h3>
+                </div>
+                <div class="card-body">
+                    @if (!string.IsNullOrEmpty(ErrorMessage))
+                    {
+                        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                            <i class="oi oi-circle-x"></i> @ErrorMessage
+                            <button type="button" class="btn-close" @onclick="() => ErrorMessage = string.Empty"></button>
+                        </div>
+                    }
+
+                    @if (!string.IsNullOrEmpty(SuccessMessage))
+                    {
+                        <div class="alert alert-success alert-dismissible fade show" role="alert">
+                            <i class="oi oi-circle-check"></i> @SuccessMessage
+                            <button type="button" class="btn-close" @onclick="() => SuccessMessage = string.Empty"></button>
+                        </div>
+                    }
+
+                    <form @onsubmit="HandleSubmit" @onsubmit:preventDefault="true">
+                        <!-- MAC Address Input -->
+                        <div class="mb-3">
+                            <label for="macAddress" class="form-label">
+                                MAC Address <span class="text-danger">*</span>
+                            </label>
+                            <input type="text"
+                                   class="form-control @(IsMacValid ? "" : "is-invalid")"
+                                   id="macAddress"
+                                   @bind="MacAddress"
+                                   @bind:event="oninput"
+                                   placeholder="AA:BB:CC:DD:EE:FF"
+                                   maxlength="17"
+                                   style="text-transform: uppercase;">
+                            <div class="form-text">
+                                Enter the MAC address in format AA:BB:CC:DD:EE:FF
+                            </div>
+                            @if (!IsMacValid && !string.IsNullOrEmpty(MacAddress))
+                            {
+                                <div class="invalid-feedback d-block">
+                                    Please enter a valid MAC address (e.g., AA:BB:CC:DD:EE:FF)
+                                </div>
+                            }
+                        </div>
+
+                        <!-- Name Input -->
+                        <div class="mb-3">
+                            <label for="tagName" class="form-label">
+                                Tag Name <span class="text-danger">*</span>
+                            </label>
+                            <input type="text"
+                                   class="form-control"
+                                   id="tagName"
+                                   @bind="TagName"
+                                   placeholder="Living Room, Bedroom, Garage, etc."
+                                   required>
+                            <div class="form-text">
+                                Give your Ruuvi tag a descriptive name for easy identification
+                            </div>
+                        </div>
+
+                        <!-- Advanced Settings Accordion -->
+                        <div class="accordion mb-3" id="advancedSettings">
+                            <div class="accordion-item">
+                                <h2 class="accordion-header">
+                                    <button class="accordion-button collapsed" type="button"
+                                            data-bs-toggle="collapse"
+                                            data-bs-target="#collapseAdvanced">
+                                        <i class="oi oi-cog me-2"></i> Advanced Settings
+                                    </button>
+                                </h2>
+                                <div id="collapseAdvanced" class="accordion-collapse collapse">
+                                    <div class="accordion-body">
+                                        <!-- Data Saving Interval -->
+                                        <div class="mb-3">
+                                            <label for="interval" class="form-label">
+                                                Data Saving Interval (seconds)
+                                            </label>
+                                            <input type="number"
+                                                   class="form-control"
+                                                   id="interval"
+                                                   @bind="DataInterval"
+                                                   min="10"
+                                                   max="3600">
+                                            <div class="form-text">
+                                                How often to save measurements (10-3600 seconds)
+                                            </div>
+                                        </div>
+
+                                        <!-- Switches -->
+                                        <div class="form-check form-switch mb-2">
+                                            <input class="form-check-input" type="checkbox" id="calculateAverage" @bind="CalculateAverage">
+                                            <label class="form-check-label" for="calculateAverage">
+                                                Calculate average values over interval
+                                            </label>
+                                        </div>
+
+                                        <div class="form-check form-switch mb-2">
+                                            <input class="form-check-input" type="checkbox" id="storeAcceleration" @bind="StoreAcceleration">
+                                            <label class="form-check-label" for="storeAcceleration">
+                                                Store acceleration data
+                                            </label>
+                                        </div>
+
+                                        <div class="form-check form-switch mb-2">
+                                            <input class="form-check-input" type="checkbox" id="allowHttp" @bind="AllowHttp">
+                                            <label class="form-check-label" for="allowHttp">
+                                                Allow HTTP gateway submissions
+                                                <small class="text-muted d-block">
+                                                    Enable when tag is out of Bluetooth range
+                                                </small>
+                                            </label>
+                                        </div>
+
+                                        <div class="form-check form-switch mb-2">
+                                            <input class="form-check-input" type="checkbox" id="checkValidity" @bind="CheckValidity">
+                                            <label class="form-check-label" for="checkValidity">
+                                                Validate incoming data
+                                                <small class="text-muted d-block">
+                                                    Discard suspicious min/max values
+                                                </small>
+                                            </label>
+                                        </div>
+
+                                        <div class="form-check form-switch mb-2">
+                                            <input class="form-check-input" type="checkbox" id="includeInDashboard" @bind="IncludeInDashboard">
+                                            <label class="form-check-label" for="includeInDashboard">
+                                                Show in dashboard
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Form Actions -->
+                        <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                            <button type="button" class="btn btn-secondary" @onclick="Cancel">
+                                <i class="oi oi-x"></i> Cancel
+                            </button>
+                            <button type="submit" class="btn btn-primary" disabled="@(!IsFormValid || IsSubmitting)">
+                                @if (IsSubmitting)
+                                {
+                                    <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                                    <span>Adding...</span>
+                                }
+                                else
+                                {
+                                    <i class="oi oi-check"></i>
+                                    <span>Add Tag</span>
+                                }
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Quick Help Card -->
+            <div class="card mt-3">
+                <div class="card-body">
+                    <h5 class="card-title">
+                        <i class="oi oi-question-mark"></i> Quick Help
+                    </h5>
+                    <ul class="mb-0">
+                        <li>Find the MAC address on the back of your Ruuvi tag or in the Ruuvi mobile app</li>
+                        <li>Use descriptive names to easily identify tags later</li>
+                        <li>Default settings work well for most use cases</li>
+                        <li>Enable HTTP gateway if the tag will be far from the Raspberry Pi</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private string MacAddress = "";
+    private string TagName = "";
+    private int DataInterval = 60;
+    private bool CalculateAverage = false;
+    private bool StoreAcceleration = false;
+    private bool AllowHttp = false;
+    private bool CheckValidity = true;
+    private bool IncludeInDashboard = true;
+    private bool IsSubmitting = false;
+
+    private string ErrorMessage = "";
+    private string SuccessMessage = "";
+
+    private bool IsMacValid => string.IsNullOrEmpty(MacAddress) || IsValidMacAddress(MacAddress);
+    private bool IsFormValid => IsValidMacAddress(MacAddress) && !string.IsNullOrWhiteSpace(TagName);
+
+    private bool IsValidMacAddress(string mac)
+    {
+        if (string.IsNullOrEmpty(mac)) return false;
+        var regex = new Regex(@"^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$");
+        return regex.IsMatch(mac);
+    }
+
+    private async Task HandleSubmit()
+    {
+        if (!IsFormValid || IsSubmitting) return;
+
+        IsSubmitting = true;
+        ErrorMessage = "";
+        SuccessMessage = "";
+
+        try
+        {
+            var normalizedMac = MacAddress.ToUpperInvariant();
+            var ruuviTag = GrainFactory.GetGrain<IRuuviTag>(normalizedMac);
+
+            // Check if tag already exists
+            var existingName = await ruuviTag.GetName();
+            if (!string.IsNullOrEmpty(existingName))
+            {
+                ErrorMessage = $"A Ruuvi tag with MAC address {normalizedMac} already exists with name '{existingName}'. Please use the edit function to modify it.";
+                IsSubmitting = false;
+                return;
+            }
+
+            // Initialize the new tag
+            await ruuviTag.Initialize(normalizedMac, TagName, new DataSavingOptions
+            {
+                CalculateAverages = CalculateAverage,
+                DataSavingInterval = DataInterval,
+                StoreAcceleration = StoreAcceleration,
+                DiscardMinMaxValues = CheckValidity
+            });
+
+            if (AllowHttp)
+            {
+                await ruuviTag.AllowMeasurementsThroughGateway(true);
+            }
+
+            // Set dashboard visibility if the interface supports it
+            // Note: This might need adjustment based on your actual interface
+            var tagData = await ruuviTag.GetTag();
+            if (tagData != null)
+            {
+                tagData.IncludeInDashboard = IncludeInDashboard;
+                await ruuviTag.Edit(tagData);
+            }
+
+            SuccessMessage = $"Successfully added Ruuvi tag '{TagName}' with MAC address {normalizedMac}";
+
+            // Clear form
+            MacAddress = "";
+            TagName = "";
+            DataInterval = 60;
+            CalculateAverage = false;
+            StoreAcceleration = false;
+            AllowHttp = false;
+            CheckValidity = true;
+            IncludeInDashboard = true;
+
+            // Redirect after a short delay
+            await Task.Delay(2000);
+            NavigationManager.NavigateTo("/taglist");
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = $"Failed to add Ruuvi tag: {ex.Message}";
+        }
+        finally
+        {
+            IsSubmitting = false;
+        }
+    }
+
+    private void Cancel()
+    {
+        NavigationManager.NavigateTo("/taglist");
+    }
+}

@@ -9,6 +9,7 @@ COPY ["FileStorageProvider/FileStorageProvider.csproj", "FileStorageProvider/"]
 COPY ["GrainInterfaces/GrainInterfaces.csproj", "GrainInterfaces/"]
 COPY ["GrainServices/GrainServices.csproj", "GrainServices/"]
 COPY ["Grains/Grains.csproj", "Grains/"]
+COPY ["RuuviUI/RuuviUI.csproj", "RuuviUI/"]
 
 # Restore dependencies as a separate layer
 RUN dotnet restore "RuuviCore/RuuviCore.csproj" --runtime linux-arm
@@ -59,14 +60,13 @@ COPY --from=publish --chown=ruuviapp:ruuviapp /app/publish .
 # Set environment variables for better performance
 ENV DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=false \
     DOTNET_RUNNING_IN_CONTAINER=true \
-    ASPNETCORE_URLS=http://+:8080 \
+    ASPNETCORE_URLS=http://+:4000 \
     ASPNETCORE_ENVIRONMENT=Production
 
 # Switch to non-root user
 USER ruuviapp
 
-EXPOSE 8080
-EXPOSE 443
+EXPOSE 4000
 
-# Use exec form for better signal handling
-ENTRYPOINT ["dotnet", "ruuvi-core.dll"]
+# Use exec form for better signal handling, enable HTTP gateway for UI
+ENTRYPOINT ["dotnet", "ruuvi-core.dll", "--http"]

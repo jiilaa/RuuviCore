@@ -36,6 +36,9 @@ public class EditOptions : OptionBase
 
     [Option('c', longName: "checkValidity", Required = false, HelpText = "Whether the RuuviTag should do some crude sanity checks for incoming data.")]
     public bool? CheckValidity { get; set; }
+
+    [Option('b', longName: "bucketSize", Required = false, HelpText = "Bucket size in minutes. Ignored if Average is false. Otherwise, defines the bucket size to calculate the averages. Must be even hours or 1/2/3/5/10/15/20/30 minutes", Default = 15)]
+    public int BucketSizeMinutes { get; set; }
 }
 
 [Verb("add", HelpText = "Adds a new RuuviTag with given options. If a RuuviTag with specified MAC is already added, returns an error, unless overwrite option is used.")]
@@ -58,9 +61,12 @@ public class AddOptions : OptionBase
 
     [Option('c', longName: "checkValidity", Required = false, HelpText = "Whether the RuuviTag should do some crude sanity checks for incoming data.", Default = false)]
     public bool CheckValidity { get; set; }
-        
+
     [Option('o', Required = false, HelpText = "If a RuuviTag is registered with the same MAC address, overwrite the configuration (even with the default values).", Default = false)]
     public bool Overwrite { get; set; }
+
+    [Option('b', longName: "bucketSize", Required = false, HelpText = "Bucket size in minutes. Ignored if Average is false. Otherwise, defines the bucket size to calculate the averages. Must be even hours or 1/2/3/5/10/15/20/30 minutes", Default = 15)]
+    public int BucketSizeMinutes { get; set; }
 }
 
 [Verb("view", HelpText = "Display information of a RuuviTag. As a side effect, creates a new (unconfigured) RuuviTag with specified MAC address if one does not exist.")]
@@ -76,9 +82,9 @@ public class ViewOptions : OptionBase
 class Program
 {
     private const string Logo = @"
-  _____                   _  _____               
- |  __ \                 (_)/ ____|              
- | |__) |   _ _   ___   ___| |     ___  _ __ ___ 
+  _____                   _  _____
+ |  __ \                 (_)/ ____|
+ | |__) |   _ _   ___   ___| |     ___  _ __ ___
  |  _  / | | | | | \ \ / / | |    / _ \| '__/ _ \
  | | \ \ |_| | |_| |\ V /| | |___| (_) | | |  __/
  |_|  \_\__,_|\__,_| \_/ |_|\_____\___/|_|  \___|
@@ -93,7 +99,7 @@ class Program
                     .Configure<ConsoleLifetimeOptions>(sp => sp.SuppressStatusMessages = true))
             .Build();
         await host.StartAsync();
-            
+
         Console.Write(Logo);
         Console.WriteLine($"RuuviCore configuration utility. Version: {Assembly.GetEntryAssembly()?.GetName().Version}");
 
@@ -156,7 +162,8 @@ class Program
             existingOptions.CalculateAverages = options.Average ?? existingOptions.CalculateAverages;
             existingOptions.DataSavingInterval = options.Interval ?? existingOptions.DataSavingInterval;
             existingOptions.DiscardMinMaxValues = options.CheckValidity ?? existingOptions.DiscardMinMaxValues;
-                
+            existingOptions.BucketSize = TimeSpan.FromMinutes(options.BucketSizeMinutes);
+
             await ruuviTag.SetDataSavingOptions(existingOptions);
             Console.WriteLine($"Saved options: {existingOptions}.");
         }

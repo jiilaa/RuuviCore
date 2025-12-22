@@ -1,0 +1,59 @@
+# Cross-compile for ARM without using QEMU
+# This avoids segmentation faults during build
+
+# Build stage - use x64 SDK
+FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:9.0 AS build
+ARG TARGETARCH
+ARG BUILDPLATFORM
+WORKDIR /src
+
+# Copy project files
+COPY Bluez/*.csproj Bluez/
+COPY Common/*.csproj Common/
+COPY FileStorageProvider/*.csproj FileStorageProvider/
+COPY GrainInterfaces/*.csproj GrainInterfaces/
+COPY GrainServices/*.csproj GrainServices/
+COPY Grains/*.csproj Grains/
+COPY RuuviConfig/*.csproj RuuviConfig/
+COPY RuuviCore/*.csproj RuuviCore/
+COPY RuuviUI/*.csproj RuuviUI/
+
+# Restore dependencies (will run on build platform, not target)
+RUN dotnet restore "RuuviCore/RuuviCore.csproj"
+
+# Copy everything
+COPY . .
+
+# Build and publish for ARM
+WORKDIR "/src/RuuviCore"
+RUN dotnet publish "RuuviCore.csproj" \
+    -c Release \
+    -r linux-arm \
+    -p:PublishSingleFile=false \
+    -p:PublishTrimmed=false \
+    --self-contained false \
+    -o /app/publish
+
+# Runtime stage - ARM32
+FROM mcr.microsoft.com/dotnet/aspnet:9.0-bookworm-slim-arm32v7 AS runtime
+WORKDIR /app
+
+# Install Bluetooth/D-Bus packages
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        dbus \
+        bluez \
+        libglib2.0-0 && \
+    rm -rf /var/lib/apt/lists/*
+
+# Copy published app from build stage
+COPY --from=build /app/publish .
+
+# Configure environment
+ENV ASPNETCORE_URLS=http://+:4000
+ENV ASPNETCORE_ENVIRONMENT=Production
+ENV DOTNET_RUNNING_IN_CONTAINER=true
+
+EXPOSE 4000
+
+ENTRYPOINT ["dotnet", "ruuvi-core.dll", "--http"]

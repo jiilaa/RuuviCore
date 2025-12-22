@@ -2,15 +2,16 @@
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Threading.Tasks;
-using bluez.DBus;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using net.jommy.RuuviCore.Bluez;
+using net.jommy.RuuviCore.Bluez.Objects;
 using net.jommy.RuuviCore.Common;
 using net.jommy.RuuviCore.Interfaces;
 using Orleans;
 using Orleans.Concurrency;
 using Orleans.Runtime;
-using Tmds.DBus;
+using Tmds.DBus.Protocol;
 
 namespace net.jommy.RuuviCore.GrainServices;
 
@@ -25,8 +26,9 @@ public class DBusListener : GrainService, IRuuviDBusListener
     private const string DBusDeviceInterfaceName = "org.bluez.Device1";
     private readonly IDictionary<string, IDeviceListener> _deviceListeners = new ConcurrentDictionary<string, IDeviceListener>();
     private IDisposable _interfacesAddedWatcher;
-    private IDisposable _propertyChangeWatcher;
-    private IAdapter1 _adapter;
+    private Connection _connection;
+    private BluezObjectFactory _factory;
+    private Adapter _adapter;
     private readonly DBusSettings _dbusSettings;
     private readonly DeviceListenerFactory _deviceListenerFactory;
     private readonly ILogger<DBusListener> _logger;
@@ -42,15 +44,18 @@ public class DBusListener : GrainService, IRuuviDBusListener
 
     public override async Task Stop()
     {
-        await _adapter.StopDiscoveryAsync();
-            
+        if (_adapter != null)
+        {
+            await _adapter.StopDiscoveryAsync();
+        }
+
         foreach (var deviceListener in _deviceListeners)
         {
             deviceListener.Value.Dispose();
         }
-        _interfacesAddedWatcher.Dispose();
-        _propertyChangeWatcher.Dispose();
-            
+        _interfacesAddedWatcher?.Dispose();
+        _connection?.Dispose();
+
         await base.Stop();
     }
 
@@ -76,21 +81,31 @@ public class DBusListener : GrainService, IRuuviDBusListener
 
         try
         {
-            _adapter = Connection.System.CreateProxy<IAdapter1>(DBusServiceName, $"/org/bluez/{_dbusSettings.BluetoothAdapterName}");
-            var objectManager = Connection.System.CreateProxy<IObjectManager>(DBusServiceName, "/");
+            // Create connection to system bus
+            _connection = new Connection(Address.System);
+            await _connection.ConnectAsync();
+
+            // Create factory for Bluez objects
+            _factory = new BluezObjectFactory(_connection, DBusServiceName);
+
+            // Create adapter and object manager
+            _adapter = _factory.CreateAdapter(new ObjectPath($"/org/bluez/{_dbusSettings.BluetoothAdapterName}"));
+            var objectManager = _factory.CreateObjectManager(new ObjectPath("/"));
+
+            // Watch for new devices and property changes
             _interfacesAddedWatcher = await objectManager.WatchInterfacesAddedAsync(OnDeviceAdded);
-            _propertyChangeWatcher = await _adapter.WatchPropertiesAsync(OnPropertyChanges);
              
             var objects = await objectManager.GetManagedObjectsAsync();
             foreach (var device in objects)
             {
-                var objectPath = device.Key.ToString();
+                var objectPath = device.Key;
+                var objectPathString = objectPath.ToString();
                 // First make sure the device is under the correct parent (i.e. the adapter)
-                if (!objectPath.StartsWith(_adapter.ObjectPath.ToString()))
+                if (!objectPathString.StartsWith(_adapter.Path.ToString()))
                 {
                     continue;
                 }
-                    
+
                 // Then check the interface
                 if (device.Value.ContainsKey(DBusDeviceInterfaceName))
                 {
@@ -107,18 +122,17 @@ public class DBusListener : GrainService, IRuuviDBusListener
         }
     }
 
-    private void OnPropertyChanges(PropertyChanges obj)
-    {
-        _logger.LogInformation("DBUS property change: {propertyChanges}", obj);
-        // TODO: This is probably no longer needed, test if DBUS listening works without this.  
-    }
-
-    private async void OnDeviceAdded((ObjectPath objectPath, IDictionary<string, IDictionary<string, object>> interfaces) args)
+    private async void OnDeviceAdded(Exception ex, (ObjectPath objectPath, Dictionary<string, Dictionary<string, VariantValue>> interfaces) args)
     {
         // Async void is a big no-no, but Tmds.DBus doesn't provide a Task based way to do this,
         // so pokemon-catch all exceptions to avoid crashing the whole application
         try
         {
+            if (ex != null)
+            {
+                _logger.LogError(ex, "Error in InterfacesAdded signal");
+                return;
+            }
             await RegisterDevice(args.objectPath);
         }
         catch (Exception e)
@@ -130,9 +144,9 @@ public class DBusListener : GrainService, IRuuviDBusListener
     private async Task RegisterDevice(ObjectPath objectPath)
     {
         _logger.LogInformation("Registering device: {objectPath}", objectPath);
-        
-        var device = Connection.System.CreateProxy<IDevice1>(DBusServiceName, objectPath);
-        IDictionary<ushort, object> manufacturerData;
+
+        var device = _factory.CreateDevice(objectPath);
+        Dictionary<ushort, VariantValue> manufacturerData;
         try
         {
             manufacturerData = await device.GetManufacturerDataAsync();
@@ -141,18 +155,18 @@ public class DBusListener : GrainService, IRuuviDBusListener
         {
             // If manufacturer data property is not found, Tmds throws exception with details:
             // org.freedesktop.DBus.Error.InvalidArgs: No such property 'ManufacturerData'
-            if (e.ErrorName.EndsWith("InvalidArgs"))
+            if (e.ErrorName != null && e.ErrorName.EndsWith("InvalidArgs"))
             {
                 _logger.LogDebug("Skipping device without manufacturer data.");
                 return;
             }
 
-            _logger.LogError("Error getting manufacturer data: {errorMessage}. Continuing.", e.Message);
+            _logger.LogDebug("Error getting manufacturer data: {ErrorMessage}. Continuing.", e.Message);
             return;
         }
         catch (Exception e)
         {
-            _logger.LogError("A non-DBUS exception occurred: {errorMessage}. Continuing.", e.Message);
+            _logger.LogError("A non-DBUS exception occurred: {ErrorMessage}. Continuing.", e.Message);
             return;
         }
             
@@ -170,7 +184,7 @@ public class DBusListener : GrainService, IRuuviDBusListener
                 }
 
                 // Devices are found again with certain interval. If old listener hasn't had data for a while, let's dispose it and start a new one.
-                _logger.LogInformation("Disposing old device listener with address {address}.", address);
+                _logger.LogInformation("Disposing old device listener with address {Address}.", address);
                 _deviceListeners.Remove(address);
                 existingListener.Dispose();
             }
@@ -183,7 +197,7 @@ public class DBusListener : GrainService, IRuuviDBusListener
             }
             else
             {
-                _logger.LogInformation("Unsupported manufacturer, ignoring: {data}.", manufacturerData);
+                _logger.LogDebug("Unsupported manufacturer, ignoring: {Data}.", manufacturerData);
             }
         }
         else

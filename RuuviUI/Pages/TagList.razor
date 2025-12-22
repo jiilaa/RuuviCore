@@ -1,59 +1,193 @@
-﻿@page "/taglist"
+@page "/taglist"
 
 @using System.Globalization
 @using net.jommy.RuuviCore.Interfaces
-@using net.jommy.RuuviCore.Services
-@inject IRuuviTagRepository RuuviTagRepository
+@inject Orleans.IGrainFactory GrainFactory
 @inject NavigationManager NavigationManager
 
-<h1>RuuviTags currently in the system</h1>
+<div class="container-fluid mt-4">
+    <div class="row">
+        <div class="col">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h1>
+                    <i class="oi oi-bluetooth"></i> Ruuvi Tags
+                </h1>
+                <button class="btn btn-primary" @onclick="AddNew">
+                    <i class="oi oi-plus"></i> Add New Tag
+                </button>
+            </div>
 
-@if (_ruuviTags == null)
-{
-    <p><em>Loading...</em></p>
-}
-else
-{
-    <table class="table">
-        <thead>
-        <tr>
-            <th>ID</th>
-            <th>Name</th>
-            <th>Last communication time</th>
-            <th>Modification time</th>
-        </tr>
-        </thead>
-        <tbody>
-        @foreach (var ruuviTag in _ruuviTags)
-        {
-            <tr>
-                <td>@ruuviTag.MacAddress</td>
-                <td>@ruuviTag.Name</td>
-                <td>@ruuviTag.LastSeen</td>
-                <td>@ruuviTag.ModificationTime.ToString("yyyy-MM-dd HH:mm:ssZ", CultureInfo.InvariantCulture)</td>
-                <td><button class="btn btn-primary" @onclick="@(() => NavigateToEditor(ruuviTag.MacAddress))">Edit...</button></td>
-            </tr>
-        }
-        </tbody>
-    </table>
-}
-<button class="btn btn-primary" @onclick="AddNew">Add new...</button>
+            @if (_ruuviTags == null)
+            {
+                <div class="d-flex justify-content-center p-5">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                </div>
+            }
+            else if (_ruuviTags.Count == 0)
+            {
+                <div class="alert alert-info" role="alert">
+                    <h4 class="alert-heading">No Ruuvi Tags Found</h4>
+                    <p>You haven't added any Ruuvi tags yet.</p>
+                    <hr>
+                    <p class="mb-0">
+                        <button class="btn btn-primary" @onclick="AddNew">
+                            <i class="oi oi-plus"></i> Add Your First Tag
+                        </button>
+                    </p>
+                </div>
+            }
+            else
+            {
+                <div class="card">
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Status</th>
+                                        <th>Name</th>
+                                        <th>MAC Address</th>
+                                        <th>Last Seen</th>
+                                        <th>Modified</th>
+                                        <th class="text-end">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var ruuviTag in _ruuviTags)
+                                    {
+                                        <tr>
+                                            <td>
+                                                @{
+                                                    var statusClass = IsRecent(ruuviTag.LastSeen) ? "success" : "warning";
+                                                    var statusIcon = IsRecent(ruuviTag.LastSeen) ? "signal" : "ban";
+                                                    var statusText = IsRecent(ruuviTag.LastSeen) ? "Online" : "Offline";
+                                                }
+                                                <span class="badge bg-@statusClass">
+                                                    <i class="oi oi-@statusIcon"></i> @statusText
+                                                </span>
+                                            </td>
+                                            <td class="fw-bold">@ruuviTag.Name</td>
+                                            <td class="font-monospace">@ruuviTag.MacAddress</td>
+                                            <td>
+                                                @if (ruuviTag.LastSeen.HasValue)
+                                                {
+                                                    <span title="@ruuviTag.LastSeen.Value.ToString("yyyy-MM-dd HH:mm:ss")">
+                                                        @GetTimeAgo(ruuviTag.LastSeen.Value)
+                                                    </span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">Never</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                <span title="@ruuviTag.ModificationTime.ToString("yyyy-MM-dd HH:mm:ss")">
+                                                    @ruuviTag.ModificationTime.ToString("MMM dd, HH:mm")
+                                                </span>
+                                            </td>
+                                            <td class="text-end">
+                                                <div class="btn-group btn-group-sm" role="group">
+                                                    <button class="btn btn-outline-primary"
+                                                            @onclick="@(() => ViewDetails(ruuviTag.MacAddress))"
+                                                            title="View Details">
+                                                        <i class="oi oi-eye"></i>
+                                                    </button>
+                                                    <button class="btn btn-outline-secondary"
+                                                            @onclick="@(() => NavigateToEditor(ruuviTag.MacAddress))"
+                                                            title="Edit Settings">
+                                                        <i class="oi oi-pencil"></i>
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mt-3 text-muted">
+                    <small>
+                        <i class="oi oi-info"></i>
+                        Total tags: @_ruuviTags.Count |
+                        Online: @_ruuviTags.Count(t => IsRecent(t.LastSeen)) |
+                        Last refresh: @DateTime.Now.ToString("HH:mm:ss")
+                    </small>
+                </div>
+            }
+        </div>
+    </div>
+</div>
 
 @code {
-    private List<RuuviTagInfo> _ruuviTags;
+    private List<RuuviTagInfo> _ruuviTags = new List<RuuviTagInfo>();
+    private System.Threading.Timer _refreshTimer;
 
     protected override async Task OnInitializedAsync()
     {
-        _ruuviTags = await RuuviTagRepository.GetRuuviTagsAsync();
+        await LoadTags();
+
+        // Auto-refresh every 30 seconds
+        _refreshTimer = new System.Threading.Timer(async _ =>
+        {
+            await InvokeAsync(async () =>
+            {
+                await LoadTags();
+                StateHasChanged();
+            });
+        }, null, TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(30));
     }
-    
+
+    private async Task LoadTags()
+    {
+        // For now, we'll create a simple list
+        // In production, you'd get all grain IDs from a registry grain
+        _ruuviTags = new List<RuuviTagInfo>();
+    }
+
     private void AddNew()
     {
-        NavigationManager.NavigateTo($"/edit/NewTag");
+        NavigationManager.NavigateTo("/add-tag");
     }
 
     private void NavigateToEditor(string ruuviTagMacAddress)
     {
         NavigationManager.NavigateTo($"/edit/{ruuviTagMacAddress}");
+    }
+
+    private void ViewDetails(string ruuviTagMacAddress)
+    {
+        // TODO: Navigate to a details view page
+        NavigationManager.NavigateTo($"/view/{ruuviTagMacAddress}");
+    }
+
+    private bool IsRecent(DateTime? lastSeen)
+    {
+        if (!lastSeen.HasValue) return false;
+        return (DateTime.Now - lastSeen.Value).TotalMinutes < 5;
+    }
+
+    private string GetTimeAgo(DateTime dateTime)
+    {
+        var timeSpan = DateTime.Now - dateTime;
+
+        if (timeSpan.TotalSeconds < 60)
+            return "Just now";
+        if (timeSpan.TotalMinutes < 60)
+            return $"{(int)timeSpan.TotalMinutes}m ago";
+        if (timeSpan.TotalHours < 24)
+            return $"{(int)timeSpan.TotalHours}h ago";
+        if (timeSpan.TotalDays < 7)
+            return $"{(int)timeSpan.TotalDays}d ago";
+
+        return dateTime.ToString("MMM dd");
+    }
+
+    public void Dispose()
+    {
+        _refreshTimer?.Dispose();
     }
 }

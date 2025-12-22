@@ -1,19 +1,21 @@
-version: '3'
 services:
   ruuvicore:
     container_name: ruuvi-core
     image: localhost:5000/ruuvicore:latest  # Pull from local registry
     environment:
-    - "ListeningSettings__HttpEnabled=true"
-    - "DBUS_SESSION_BUS_ADDRESS=unix:path=/run/dbus/system_bus_socket"
+      - "ListeningSettings__HttpEnabled=true"
+      - "ListeningSettings__ListeningPort=4000"
+      - "DBusSettings__BluetoothAdapterName=hci0"
+      - "DBUS_SESSION_BUS_ADDRESS=unix:path=/run/dbus/system_bus_socket"
     volumes:
-    - /var/run/dbus:/var/run/dbus:ro
-    - /run/dbus:/run/dbus:ro
+      - /var/run/dbus:/var/run/dbus:ro
+      - /run/dbus:/run/dbus:ro
+      - ruuvi-dataprotection:/app/.aspnet/DataProtection-Keys  # Persist data protection keys
+      - /home/jommy/docker/data/ruuvi-data:/app/RuuviTags  # Persist tag storage on host
     privileged: true
     restart: always
-    networks:
-    - host
+    network_mode: host  # Required for D-Bus/Bluetooth access
 
-networks:
-  host:
-    external: true
+volumes:
+  ruuvi-dataprotection:
+    driver: local

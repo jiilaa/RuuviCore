@@ -1,7 +1,8 @@
 using System.Collections.Generic;
-using bluez.DBus;
 using Microsoft.Extensions.Logging;
+using net.jommy.RuuviCore.Bluez.Objects;
 using Orleans;
+using Tmds.DBus.Protocol;
 
 namespace net.jommy.RuuviCore.GrainServices;
 
@@ -17,12 +18,20 @@ public class DeviceListenerFactory
         _loggerFactory = loggerFactory;
     }
 
-    public bool TryConstructDeviceListener(IDevice1 device, string deviceAddress, IDictionary<ushort, object> manufacturerData, out IDeviceListener deviceListener)
+    public bool TryConstructDeviceListener(
+        Device device, 
+        string deviceAddress, 
+        Dictionary<ushort, VariantValue> manufacturerData, 
+        out IDeviceListener deviceListener)
     {
         deviceListener = null;
         if (manufacturerData.ContainsKey(RuuviManufacturerKey))
         {
-            deviceListener = new RuuviTagListener(device, deviceAddress, _grainFactory, _loggerFactory.CreateLogger<RuuviTagListener>());
+            deviceListener = new RuuviTagListener(
+                device, 
+                deviceAddress, 
+                _grainFactory, 
+                _loggerFactory.CreateLogger<RuuviTagListener>());
         }
 
         return deviceListener != null;

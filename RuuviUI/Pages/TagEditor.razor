@@ -15,35 +15,35 @@
         {
             <div>
                 <BSLabel For="macAddress">MAC address:</BSLabel>
-                <BSInput Id="macAddress" InputType="InputType.Text" PlaceHolder="Enter MAC address" @bind-Value="MacAddress"/>
+                <BSInput Id="macAddress" InputType="InputType.Text" PlaceHolder="Enter MAC address" Value="@MacAddress" ValueChanged="@((string val) => MacAddress = val)"/>
             </div>
         }
         <div>
             <BSLabel For="name">Name:</BSLabel>
-            <BSInput Id="name" InputType="InputType.Text" @bind-Value="RuuviTag.Name"/>
+            <BSInput Id="name" InputType="InputType.Text" Value="@RuuviTag.Name" ValueChanged="@((string val) => RuuviTag.Name = val)"/>
         </div>
-        <div Class="@BS.Form_Check @BS.Form_Switch">
-            <BSInputCheckbox CheckedValue="@("on")" @bind-Value="StoreName"/>
+        <div Class="form-check form-switch">
+            <BSInputCheckbox CheckedValue="@("on")" Value="@StoreName" ValueChanged="@((string val) => StoreName = val)"/>
             <BSLabel IsCheckLabel="true">Store name with measurement data</BSLabel>
         </div>
         <div>
             <BSLabel For="dataSavingInterval">Data saving interval (seconds)</BSLabel>
-            <BSInput InputType="InputType.Number" @bind-Value="DataSavingInterval" />
+            <BSInput InputType="InputType.Number" Value="@DataSavingInterval" ValueChanged="@((string val) => DataSavingInterval = val)" />
         </div>
-        <div Class="@BS.Form_Check @BS.Form_Switch">
-            <BSInputCheckbox CheckedValue="@("on")" @bind-Value="StoreAcceleration"/>
+        <div Class="form-check form-switch">
+            <BSInputCheckbox CheckedValue="@("on")" Value="@StoreAcceleration" ValueChanged="@((string val) => StoreAcceleration = val)"/>
             <BSLabel IsCheckLabel="true">Store acceleration values with measurement data</BSLabel>
         </div>
-        <div Class="@BS.Form_Check @BS.Form_Switch">
-            <BSInputCheckbox CheckedValue="@("on")" @bind-Value="AllowMeasurementsThroughGateway"/>
+        <div Class="form-check form-switch">
+            <BSInputCheckbox CheckedValue="@("on")" Value="@AllowMeasurementsThroughGateway" ValueChanged="@((string val) => AllowMeasurementsThroughGateway = val)"/>
             <BSLabel IsCheckLabel="true">Allow measurement data to be submitted through HTTP gateway also (e.g. when RuuviTag is too far for RuuviCore to hear)</BSLabel>
         </div>
-        <div Class="@BS.Form_Check @BS.Form_Switch">
-            <BSInputCheckbox CheckedValue="@("on")" @bind-Value="DiscardMinMaxValues"/>
+        <div Class="form-check form-switch">
+            <BSInputCheckbox CheckedValue="@("on")" Value="@DiscardMinMaxValues" ValueChanged="@((string val) => DiscardMinMaxValues = val)"/>
             <BSLabel IsCheckLabel="true">Discard min or max values (usually an indication of a faulty blueltooth packet).</BSLabel>
         </div>
-        <div Class="@BS.Form_Check @BS.Form_Switch">
-            <BSInputCheckbox CheckedValue="@("on")" @bind-Value="IncludeInDashboard"/>
+        <div Class="form-check form-switch">
+            <BSInputCheckbox CheckedValue="@("on")" Value="@IncludeInDashboard" ValueChanged="@((string val) => IncludeInDashboard = val)"/>
             <BSLabel IsCheckLabel="true">Show current data of this RuuviTag in the dashboard</BSLabel>
         </div>
         <BSButton Color="BSColor.Primary" ButtonType="ButtonType.Submit" @onclick="@(() => HandleValidSubmitAsync())">Save</BSButton>
