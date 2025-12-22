@@ -2,7 +2,7 @@
 # This avoids segmentation faults during build
 
 # Build stage - use x64 SDK
-FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:9.0 AS build
+FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 ARG TARGETARCH
 ARG BUILDPLATFORM
 WORKDIR /src
@@ -35,16 +35,14 @@ RUN dotnet publish "RuuviCore.csproj" \
     -o /app/publish
 
 # Runtime stage - ARM32
-FROM mcr.microsoft.com/dotnet/aspnet:9.0-bookworm-slim-arm32v7 AS runtime
+FROM mcr.microsoft.com/dotnet/aspnet:10.0-alpine3.23-arm32v7 AS runtime
 WORKDIR /app
 
 # Install Bluetooth/D-Bus packages
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
+RUN apk add --no-cache \
         dbus \
         bluez \
-        libglib2.0-0 && \
-    rm -rf /var/lib/apt/lists/*
+        glib
 
 # Copy published app from build stage
 COPY --from=build /app/publish .

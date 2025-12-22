@@ -1,5 +1,5 @@
 # Build stage with caching optimization
-FROM mcr.microsoft.com/dotnet/sdk:9.0-bookworm-slim-arm32v7 AS build
+FROM mcr.microsoft.com/dotnet/sdk:10.0-alpine3.23-arm32v7 AS build
 WORKDIR /src
 
 # Copy only csproj files first for better layer caching
@@ -35,22 +35,18 @@ RUN dotnet publish "RuuviCore.csproj" \
     -o /app/publish
 
 # Runtime stage - smaller base image
-FROM mcr.microsoft.com/dotnet/aspnet:9.0-bookworm-slim-arm32v7 AS final
+FROM mcr.microsoft.com/dotnet/aspnet:10.0-alpine3.23-arm32v7 AS final
 
 # Install required libraries for Bluetooth/D-Bus support
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-        libc6 \
-        libgcc-s1 \
-        libstdc++6 \
+RUN apk add --no-cache \
         dbus \
-        bluez && \
-    rm -rf /var/lib/apt/lists/*
+        bluez \
+        glib
 
-# Create non-root user for security
-RUN groupadd -g 1000 ruuviapp && \
-    useradd -r -u 1000 -g ruuviapp ruuviapp && \
-    usermod -aG bluetooth ruuviapp
+# Create non-root user for security (Alpine uses addgroup/adduser)
+RUN addgroup -g 1000 ruuviapp && \
+    adduser -D -u 1000 -G ruuviapp ruuviapp && \
+    addgroup ruuviapp bluetooth
 
 WORKDIR /app
 
