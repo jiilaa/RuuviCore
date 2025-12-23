@@ -51,12 +51,25 @@ public class RuuviTagGrain : Grain, IRuuviTag
             throw new ArgumentException("MAC address does not match the actor primary key.");
         }
 
+        if (dataSavingOptions.BucketSize.Minutes >= 60)
+        {
+            if (dataSavingOptions.BucketSize.Minutes % 60 != 0)
+            {
+                throw new ArgumentException("Bucket size must be in full hours if greater than 60 minutes.");
+            }
+        }
+        else if (60 % dataSavingOptions.BucketSize.Minutes != 0)
+        {
+            throw new ArgumentException("Bucket size must divide evenly into 60 minutes if less than 60 minutes.");
+        }
+
         _ruuviTagState.State.MacAddress = macAddress;
         _ruuviTagState.State.Name = name;
         _ruuviTagState.State.DataSavingInterval = dataSavingOptions.DataSavingInterval;
         _ruuviTagState.State.CalculateAverages = dataSavingOptions.CalculateAverages;
         _ruuviTagState.State.StoreAcceleration = dataSavingOptions.StoreAcceleration;
         _ruuviTagState.State.DiscardMinMaxValues = dataSavingOptions.DiscardMinMaxValues;
+        _ruuviTagState.State.BucketSize = dataSavingOptions.BucketSize;
         _ruuviTagState.State.Initialized = true;
         await _ruuviTagState.WriteStateAsync();
         await GrainFactory.GetGrain<IRuuviTagRegistry>(0).AddOrUpdate(macAddress, name);

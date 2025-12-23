@@ -43,8 +43,8 @@ public sealed class JsonFileGrainStorage : IGrainStorage
 
         using var stream = fileInfo.OpenText();
         var storedData = await stream.ReadToEndAsync();
-    
-        grainState.State = JsonSerializer.Deserialize<T>(new BinaryData(storedData));
+
+        grainState.State = JsonSerializer.Deserialize<T>(new BinaryData(storedData), _jsonSerializerOptions);
         grainState.ETag = fileInfo.LastWriteTimeUtc.ToString(CultureInfo.InvariantCulture);
     }
 

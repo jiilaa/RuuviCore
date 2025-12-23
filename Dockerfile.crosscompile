@@ -44,13 +44,24 @@ RUN apk add --no-cache \
         bluez \
         glib
 
+# Create non-root user for security (Alpine uses addgroup/adduser)
+RUN addgroup -g 1000 ruuviapp && \
+    adduser -D -u 1000 -G ruuviapp ruuviapp && \
+    addgroup ruuviapp bluetooth
+
 # Copy published app from build stage
 COPY --from=build /app/publish .
+
+# Set ownership of app directory
+RUN chown -R ruuviapp:ruuviapp /app
 
 # Configure environment
 ENV ASPNETCORE_URLS=http://+:4000
 ENV ASPNETCORE_ENVIRONMENT=Production
 ENV DOTNET_RUNNING_IN_CONTAINER=true
+
+# Switch to non-root user
+USER ruuviapp
 
 EXPOSE 4000
 

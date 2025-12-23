@@ -34,9 +34,9 @@ public class InfluxBridge : Grain, IInfluxBridge
             .CreateCollector();
         CollectorLog.RegisterErrorHandler((message, exception) =>
         {
-            _logger.LogError(exception, "Error when activating bridge to influx: {errorMessage}", message);
+            _logger.LogError("{Message}. Error when activating bridge to influx: {ErrorMessage}", message, exception.Message);
         });
-            
+
         return Task.CompletedTask;
     }
 

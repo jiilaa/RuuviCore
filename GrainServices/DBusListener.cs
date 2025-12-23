@@ -16,7 +16,7 @@ using Tmds.DBus.Protocol;
 namespace net.jommy.RuuviCore.GrainServices;
 
 /// <summary>
-/// A service which listens to bluetooth packets from DBUS. 
+/// A service which listens to bluetooth packets from DBUS.
 /// </summary>
 [Reentrant]
 public class DBusListener : GrainService, IRuuviDBusListener
@@ -33,7 +33,7 @@ public class DBusListener : GrainService, IRuuviDBusListener
     private readonly DeviceListenerFactory _deviceListenerFactory;
     private readonly ILogger<DBusListener> _logger;
 
-    public DBusListener(GrainId grainId, Silo silo, ILoggerFactory loggerFactory, IGrainFactory grainFactory, IOptions<DBusSettings> dbusOptions) 
+    public DBusListener(GrainId grainId, Silo silo, ILoggerFactory loggerFactory, IGrainFactory grainFactory, IOptions<DBusSettings> dbusOptions)
         : base(grainId, silo, loggerFactory)
     {
         _grainFactory = grainFactory;
@@ -94,7 +94,7 @@ public class DBusListener : GrainService, IRuuviDBusListener
 
             // Watch for new devices and property changes
             _interfacesAddedWatcher = await objectManager.WatchInterfacesAddedAsync(OnDeviceAdded);
-             
+
             var objects = await objectManager.GetManagedObjectsAsync();
             foreach (var device in objects)
             {
@@ -112,7 +112,7 @@ public class DBusListener : GrainService, IRuuviDBusListener
                     await RegisterDevice(objectPath);
                 }
             }
-                
+
             await _adapter.StartDiscoveryAsync();
         }
         catch (Exception e)
@@ -143,7 +143,7 @@ public class DBusListener : GrainService, IRuuviDBusListener
 
     private async Task RegisterDevice(ObjectPath objectPath)
     {
-        _logger.LogInformation("Registering device: {objectPath}", objectPath);
+        _logger.LogDebug("Registering device: {objectPath}", objectPath);
 
         var device = _factory.CreateDevice(objectPath);
         Dictionary<ushort, VariantValue> manufacturerData;
@@ -169,7 +169,7 @@ public class DBusListener : GrainService, IRuuviDBusListener
             _logger.LogError("A non-DBUS exception occurred: {ErrorMessage}. Continuing.", e.Message);
             return;
         }
-            
+
         if (manufacturerData != null)
         {
             var address = await device.GetAddressAsync();
@@ -188,7 +188,7 @@ public class DBusListener : GrainService, IRuuviDBusListener
                 _deviceListeners.Remove(address);
                 existingListener.Dispose();
             }
-                
+
             if (_deviceListenerFactory.TryConstructDeviceListener(device, address, manufacturerData, out var deviceListener))
             {
                 _deviceListeners[address] = deviceListener;
@@ -203,7 +203,7 @@ public class DBusListener : GrainService, IRuuviDBusListener
         else
         {
             _logger.LogDebug("Discarding a bluetooth device without manufacturer data.");
-        }            
+        }
     }
 
     public async Task SimulateEvent(string macAddress)

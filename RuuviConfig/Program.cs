@@ -4,6 +4,8 @@ using System.Threading.Tasks;
 using CommandLine;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+
 using net.jommy.RuuviCore.Interfaces;
 using Orleans;
 using Orleans.Hosting;
@@ -97,6 +99,7 @@ class Program
             .ConfigureServices(
                 services => services
                     .Configure<ConsoleLifetimeOptions>(sp => sp.SuppressStatusMessages = true))
+            .ConfigureLogging(options => options.SetMinimumLevel(LogLevel.Error))
             .Build();
         await host.StartAsync();
 
