@@ -128,42 +128,46 @@ public class RuuviTagGrain : Grain, IRuuviTag
 
         if (_ruuviTagState.State.CalculateAverages)
         {
-            var bucketFull = AddMeasurementsToBucket(measurements);
-
-            if (bucketFull)
-            {
-                foreach (var bucketAverage in _ruuviTagState.State.CompletedBucketAverages)
-                {
-                    var pushedSuccessfully = await PushDataAsync(bucketAverage.Measurement);
-                    if (!pushedSuccessfully)
-                    {
-                        _logger.LogWarning(
-                            "Failed to push bucket average data for {Identity}. Storing bucket average for later retry.",
-                            GetIdentity());
-                    }
-                    else
-                    {
-                        bucketAverage.Sent = true;
-                    }
-                }
-
-                // Remove sent averages
-                _ruuviTagState.State.CompletedBucketAverages.RemoveAll(b => b.Sent);
-            }
+            AddMeasurementsToBucket(measurements);
         }
         else if (TimeSpan.FromSeconds(_ruuviTagState.State.DataSavingInterval)
                  <= measurements.Timestamp - _lastPushTime)
         {
-            var pushedSuccessfully = await PushDataAsync(measurements);
+            _ruuviTagState.State.CachedMeasurements.Add(new CachedMeasurement(measurements));
+            _lastPushTime = measurements.Timestamp;
+        }
+
+        var pushedSuccessfully = await PushDataAsync(measurements);
+        if (pushedSuccessfully)
+        {
+            _lastPushTime = measurements.Timestamp;
+        }
+        else
+        {
+            _logger.LogWarning("{Identity}: There was a problem sending the measurements.", GetIdentity());
+        }
+
+        await PublishCachedMeasurementsAsync();
+    }
+
+    private async Task PublishCachedMeasurementsAsync()
+    {
+        foreach (var cachedMeasurement in _ruuviTagState.State.CachedMeasurements.Where(cm => !cm.Sent))
+        {
+            var pushedSuccessfully = await PushDataAsync(cachedMeasurement.Measurement);
             if (pushedSuccessfully)
             {
-                _lastPushTime = measurements.Timestamp;
+                cachedMeasurement.Sent = true;
             }
             else
             {
-                _logger.LogWarning("{Identity}: There was a problem sending the measurements.", GetIdentity());
+                _logger.LogWarning("{Identity}: Failed to push measurement, storing it to cache to try again later.", GetIdentity());
+                break;
             }
         }
+
+        // Remove sent averages
+        _ruuviTagState.State.CachedMeasurements.RemoveAll(b => b.Sent);
     }
 
     private async Task StoreMeasurementDataAsync(DateTime timeStamp, short signalStrength, byte[] data)
@@ -183,7 +187,6 @@ public class RuuviTagGrain : Grain, IRuuviTag
 
     private async Task<bool> PushDataAsync(MeasurementDTO measurements)
     {
-        // TODO: Implement logic to push old data too if influxDB hasn't been reachable during the last attempt.
         _logger.LogInformation("{Identity}: Saving measurements: {measurements}", GetIdentity(), measurements);
 
         var result = await GrainFactory.GetGrain<IInfluxBridge>(0)
@@ -217,10 +220,20 @@ public class RuuviTagGrain : Grain, IRuuviTag
         }
     }
 
-    private bool AddMeasurementsToBucket(MeasurementDTO measurements)
+    private TimeSpan GetBucketSize()
     {
-        var bucketFull = false;
-        var bucketSize = _ruuviTagState.State.BucketSize;
+        if (_ruuviTagState.State.BucketSize == TimeSpan.Zero)
+        {
+            _logger.LogWarning("{Identity}: Bucket size is zero, defaulting to 1 hour", GetIdentity());
+            _ruuviTagState.State.BucketSize = TimeSpan.FromHours(1);
+        }
+
+        return _ruuviTagState.State.BucketSize;
+    }
+
+    private void AddMeasurementsToBucket(MeasurementDTO measurements)
+    {
+        var bucketSize = GetBucketSize();
 
         // Initialize first bucket
         if (_ruuviTagState.State.CurrentBucketStartTime == null)
@@ -232,7 +245,7 @@ public class RuuviTagGrain : Grain, IRuuviTag
         if (measurements.Timestamp < _ruuviTagState.State.CurrentBucketStartTime)
         {
             // Old measurement, ignore
-            return false;
+            return;
         }
 
         var currentBucketEnd = _ruuviTagState.State.CurrentBucketStartTime.Value + bucketSize;
@@ -245,12 +258,11 @@ public class RuuviTagGrain : Grain, IRuuviTag
             {
                 var bucketAverage = CalculateAverageMeasurements(
                     _ruuviTagState.State.CurrentBucketMeasurements,
-                    currentBucketEnd); // Use bucket end time as timestamp
+                    _ruuviTagState.State.CurrentBucketStartTime.Value); // Use bucket start time as timestamp
 
-                _ruuviTagState.State.CompletedBucketAverages ??= [];
-                _ruuviTagState.State.CompletedBucketAverages.Add(
+                _ruuviTagState.State.CachedMeasurements ??= [];
+                _ruuviTagState.State.CachedMeasurements.Add(
                     new CachedMeasurement { Sent = false, Measurement = bucketAverage });
-                bucketFull = true;
             }
 
             // Start new bucket
@@ -260,8 +272,6 @@ public class RuuviTagGrain : Grain, IRuuviTag
 
         // Add measurement to current bucket
         _ruuviTagState.State.CurrentBucketMeasurements.Add(measurements);
-
-        return bucketFull;
     }
 
     // Align bucket start times to fixed intervals
@@ -284,7 +294,9 @@ public class RuuviTagGrain : Grain, IRuuviTag
             Humidity = measurements.Select(m => m.Humidity).Average(),
             Pressure = measurements.Select(m => m.Pressure).Average(),
             Temperature = measurements.Select(m => m.Temperature).Average(),
-            Timestamp = timestamp
+            Timestamp = timestamp,
+            SequenceNumber = measurements.Last().SequenceNumber,
+            MovementCounter = measurements.Last().MovementCounter
         };
 
         return averageMeasurements;

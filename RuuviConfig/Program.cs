@@ -193,7 +193,8 @@ class Program
             CalculateAverages = options.Average,
             DataSavingInterval = options.Interval,
             StoreAcceleration = options.Acceleration,
-            DiscardMinMaxValues = options.CheckValidity
+            DiscardMinMaxValues = options.CheckValidity,
+            BucketSize = TimeSpan.FromMinutes(options.BucketSizeMinutes)
         });
 
         if (options.AllowHttp)

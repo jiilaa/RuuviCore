@@ -21,7 +21,7 @@ public class RuuviTagState
 
     public List<MeasurementDTO> CurrentBucketMeasurements { get; set; } = [];
 
-    public List<CachedMeasurement> CompletedBucketAverages { get; set; } = [];
+    public List<CachedMeasurement> CachedMeasurements { get; set; } = [];
 
     public bool AllowMeasurementsThroughGateway { get; set; }
     public bool InDashboard { get; set; }

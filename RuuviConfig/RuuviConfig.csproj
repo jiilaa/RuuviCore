@@ -5,9 +5,9 @@
     <TargetFramework>net10.0</TargetFramework>
     <AssemblyName>ruuviconfig</AssemblyName>
     <RootNamespace>net.jommy.RuuviCore</RootNamespace>
-    <PackageVersion>1.0.0</PackageVersion>
-    <AssemblyVersion>1.0.0</AssemblyVersion>
-    <FileVersion>1.0.0</FileVersion>
+    <PackageVersion>2.0.0</PackageVersion>
+    <AssemblyVersion>2.0.0</AssemblyVersion>
+    <FileVersion>2.0.0</FileVersion>
     <Authors>Jomi Laakkonen</Authors>
   </PropertyGroup>
 
@@ -19,12 +19,6 @@
   <ItemGroup>
     <ProjectReference Include="..\Common\Common.csproj" />
     <ProjectReference Include="..\GrainInterfaces\GrainInterfaces.csproj" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <Reference Include="Microsoft.Extensions.Hosting">
-      <HintPath>C:\Program Files\dotnet\shared\Microsoft.AspNetCore.App\7.0.0\Microsoft.Extensions.Hosting.dll</HintPath>
-    </Reference>
   </ItemGroup>
 
 </Project>

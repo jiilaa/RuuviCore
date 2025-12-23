@@ -11,8 +11,6 @@
         <FrameworkReference Include="Microsoft.AspNetCore.App" />
         <PackageReference Include="Append.Blazor.Notifications" Version="1.1.0" />
         <PackageReference Include="BlazorStrap" Version="5.2.104" />
-        <PackageReference Include="Microsoft.AspNetCore.Components.Web" Version="9.0.6" />
-        <PackageReference Include="Microsoft.AspNetCore.Components.Authorization" Version="9.0.6" />
     </ItemGroup>
 
     <ItemGroup>

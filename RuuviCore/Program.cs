@@ -23,9 +23,9 @@ namespace net.jommy.RuuviCore;
 public class Program
 {
     private const string Logo = @"
-  _____                   _  _____               
- |  __ \                 (_)/ ____|              
- | |__) |   _ _   ___   ___| |     ___  _ __ ___ 
+  _____                   _  _____
+ |  __ \                 (_)/ ____|
+ | |__) |   _ _   ___   ___| |     ___  _ __ ___
  |  _  / | | | | | \ \ / / | |    / _ \| '__/ _ \
  | | \ \ |_| | |_| |\ V /| | |___| (_) | | |  __/
  |_|  \_\__,_|\__,_| \_/ |_|\_____\___/|_|  \___|
@@ -35,7 +35,7 @@ public class Program
     {
         Console.Write(Logo);
         Console.WriteLine($"Version: {Assembly.GetEntryAssembly()?.GetName().Version}");
-            
+
         var useHttpGateway = args != null && args.Contains("--http");
 
         Console.WriteLine("Starting RuuviCore...");
@@ -55,7 +55,10 @@ public class Program
     {
         var configuration = new ConfigurationBuilder()
             .SetBasePath(AppDomain.CurrentDomain.BaseDirectory)
-            .AddJsonFile("appsettings.json", false, false).Build();
+            .AddJsonFile("appsettings.json", false, false)
+            .AddEnvironmentVariables()
+            .AddUserSecrets<Program>()
+            .Build();
 
         var hostBuilder = Host.CreateDefaultBuilder()
             .ConfigureServices((_, services) =>
@@ -68,6 +71,7 @@ public class Program
                 };
                 services.AddSingleton(jsonSerializerOptions);
             })
+            .ConfigureAppConfiguration(builder => builder.AddConfiguration(configuration))
 
 //             .UseSerilog((_, loggerConfiguration) =>
 //             {
@@ -78,7 +82,7 @@ public class Program
 //                     .MinimumLevel.Override("Microsoft.Orleans", LogEventLevel.Error)
 //                     .MinimumLevel.Override("Microsoft.AspNetCore.Hosting.Diagnostics", LogEventLevel.Error);
 //             })
-            .UseOrleans(siloBuilder => ConfigureOrleans(siloBuilder, configuration))
+            .UseOrleans(ConfigureOrleans)
             .ConfigureLogging(ConfigureLogging())
             .ConfigureServices(collection => collection.AddBlazorStrap())
             .UseConsoleLifetime(options => options.SuppressStatusMessages = true)
@@ -96,7 +100,9 @@ public class Program
                         options.Listen(IPAddress.Any, port, listenOptions =>
                         {
                             listenOptions.UseHttps(adapterOptions => adapterOptions.ServerCertificateSelector =
-                                (_, _) => new X509Certificate2(certificateFile, certificateKey));
+                                (_, _) => X509CertificateLoader.LoadPkcs12FromFile(
+                                    certificateFile,
+                                    certificateKey));
                         });
                     }
                     else
@@ -112,7 +118,7 @@ public class Program
         return hostBuilder.Build();
     }
 
-    private static void ConfigureOrleans(ISiloBuilder siloHostBuilder, IConfiguration configuration)
+    private static void ConfigureOrleans(ISiloBuilder siloHostBuilder)
     {
         siloHostBuilder.Configure<FileGrainStorageOptions>(options => options.RootDirectory = "RuuviTags");
         siloHostBuilder
@@ -127,15 +133,15 @@ public class Program
         return builder =>
         {
             builder
-                .AddConsole()
-                .AddFilter("Orleans", LogLevel.Warning)
-                .AddFilter("Orleans.Runtime.NoOpHostEnvironmentStatistics", LogLevel.Error)
-                .AddFilter("Orleans.Runtime.MembershipService", LogLevel.Error)
-                .AddFilter("Microsoft.Orleans.Messaging", LogLevel.Error)
-                .AddFilter("Microsoft.Orleans.Networking", LogLevel.Error)
-                .AddFilter("Orleans.Runtime.Scheduler.WorkItemGroup", LogLevel.Error)
-                .AddFilter("Microsoft.AspNetCore.Hosting.Diagnostics", LogLevel.Warning)
-                .AddFilter("Runtime", LogLevel.Warning);
+                .AddConsole();
+            // .AddFilter("Orleans", LogLevel.Warning)
+            // .AddFilter("Orleans.Runtime.NoOpHostEnvironmentStatistics", LogLevel.Error)
+            // .AddFilter("Orleans.Runtime.MembershipService", LogLevel.Error)
+            // .AddFilter("Microsoft.Orleans.Messaging", LogLevel.Error)
+            // .AddFilter("Microsoft.Orleans.Networking", LogLevel.Error)
+            // .AddFilter("Orleans.Runtime.Scheduler.WorkItemGroup", LogLevel.Error)
+            // .AddFilter("Microsoft.AspNetCore.Hosting.Diagnostics", LogLevel.Warning)
+            // .AddFilter("Runtime", LogLevel.Warning);
         };
     }
 
