@@ -46,6 +46,7 @@ RUN apk add --no-cache \
 # Create non-root user for security (Alpine uses addgroup/adduser)
 RUN addgroup -g 1000 ruuviapp && \
     adduser -D -u 1000 -G ruuviapp ruuviapp && \
+    addgroup -S bluetooth && \
     addgroup ruuviapp bluetooth
 
 WORKDIR /app

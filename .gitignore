@@ -251,3 +251,17 @@ _Pvt_Extensions
 ruuvi-core/
 *.tar
 *.tar.gz
+
+# Local docker compose for development
+docker-compose-local-registry.yml
+
+# Local build and deployment scripts
+build-*.ps1
+build-*.sh
+fix-*.ps1
+test-*.ps1
+deploy-*.ps1
+init-*.ps1
+
+# BuildKit config for local registry
+buildkitd.toml

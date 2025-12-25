@@ -1,19 +1,26 @@
-version: '3'
 services:
   ruuvicore:
     container_name: ruuvi-core
     image: ruuvicore:latest
     environment:
     - "ListeningSettings__HttpEnabled=true"
+    - "ListeningSettings__ListeningPort=4000"
+    - "DBusSettings__BluetoothAdapterName=hci0"
     - "DBUS_SESSION_BUS_ADDRESS=unix:path=/run/dbus/system_bus_socket"
+    - "InfluxSettings__InfluxAddress=${INFLUX_ADDRESS:-http://localhost:8086}"
+    - "InfluxSettings__Username=${INFLUX_USERNAME:-admin}"
+    - "InfluxSettings__Password=${INFLUX_PASSWORD:-changeme123456}"
     volumes:
     - /var/run/dbus:/var/run/dbus:ro
     - /run/dbus:/run/dbus:ro
+    - ruuvi-dataprotection:/app/.aspnet/DataProtection-Keys  # Persist data protection keys
+    - ruuvi-tags:/app/RuuviTags  # Persist tag storage
     privileged: true
     restart: always
-    networks:
-    - host
-    
-networks:
-  host:
-    external: true  
+    network_mode: host  # Use host network mode directly - exposes port 4000 on host
+
+volumes:
+  ruuvi-dataprotection:
+    driver: local
+  ruuvi-tags:
+    driver: local  

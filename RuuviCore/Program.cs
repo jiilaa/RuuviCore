@@ -17,6 +17,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Orleans.Hosting;
 using BlazorStrap;
+using Serilog;
+using Serilog.Events;
 
 namespace net.jommy.RuuviCore;
 
@@ -72,16 +74,15 @@ public class Program
                 services.AddSingleton(jsonSerializerOptions);
             })
             .ConfigureAppConfiguration(builder => builder.AddConfiguration(configuration))
-
-//             .UseSerilog((_, loggerConfiguration) =>
-//             {
-//                 loggerConfiguration
-//                     .WriteTo.Console()
-// //                    .MinimumLevel.Information()
-//                     .MinimumLevel.Override("Orleans", LogEventLevel.Error)
-//                     .MinimumLevel.Override("Microsoft.Orleans", LogEventLevel.Error)
-//                     .MinimumLevel.Override("Microsoft.AspNetCore.Hosting.Diagnostics", LogEventLevel.Error);
-//             })
+            .UseSerilog((_, loggerConfiguration) =>
+            {
+                loggerConfiguration
+                    .WriteTo.Console()
+                    .MinimumLevel.Information()
+                    .MinimumLevel.Override("Orleans", LogEventLevel.Error)
+                    .MinimumLevel.Override("Microsoft.Orleans", LogEventLevel.Error)
+                    .MinimumLevel.Override("Microsoft.AspNetCore.Hosting.Diagnostics", LogEventLevel.Error);
+            })
             .UseOrleans(ConfigureOrleans)
             .ConfigureLogging(ConfigureLogging())
             .ConfigureServices(collection => collection.AddBlazorStrap())
@@ -133,15 +134,8 @@ public class Program
         return builder =>
         {
             builder
-                .AddConsole();
-            // .AddFilter("Orleans", LogLevel.Warning)
-            // .AddFilter("Orleans.Runtime.NoOpHostEnvironmentStatistics", LogLevel.Error)
-            // .AddFilter("Orleans.Runtime.MembershipService", LogLevel.Error)
-            // .AddFilter("Microsoft.Orleans.Messaging", LogLevel.Error)
-            // .AddFilter("Microsoft.Orleans.Networking", LogLevel.Error)
-            // .AddFilter("Orleans.Runtime.Scheduler.WorkItemGroup", LogLevel.Error)
-            // .AddFilter("Microsoft.AspNetCore.Hosting.Diagnostics", LogLevel.Warning)
-            // .AddFilter("Runtime", LogLevel.Warning);
+                .AddSerilog()
+                .AddFilter("Orleans", LogLevel.Warning);
         };
     }
 
