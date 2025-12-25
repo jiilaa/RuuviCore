@@ -178,13 +178,13 @@ public class DBusListener : GrainService, IRuuviDBusListener
             {
                 if (existingListener.IsAlive())
                 {
-                    _logger.LogDebug("Using old device listener with address {address} to handle manufacturer data.", address);
+                    _logger.LogDebug("Reusing existing device listener for {address}", address);
                     await existingListener.HandleDataAsync(manufacturerData);
                     return;
                 }
 
                 // Devices are found again with certain interval. If old listener hasn't had data for a while, let's dispose it and start a new one.
-                _logger.LogInformation("Disposing old device listener with address {Address}.", address);
+                _logger.LogWarning("Disposing stale device listener for {Address} - no data received recently", address);
                 _deviceListeners.Remove(address);
                 existingListener.Dispose();
             }

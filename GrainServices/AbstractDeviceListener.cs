@@ -56,9 +56,18 @@ public abstract class AbstractDeviceListener : IDeviceListener
         return _aliveCounter <= AliveThreshold;
     }
 
-    private Task<short> GetSignalStrength()
+    private async Task<short?> GetSignalStrength()
     {
-        return _device.GetRSSIAsync();
+        try
+        {
+            return await _device.GetRSSIAsync();
+        }
+        catch (DBusException ex) when (ex.ErrorName?.Contains("InvalidArgs") == true)
+        {
+            // RSSI property not available yet (common during initial device discovery)
+            _logger.LogDebug("RSSI not available for device {DeviceAddress}: {ErrorMessage}", DeviceAddress, ex.Message);
+            return null;
+        }
     }
 
     public async Task HandleDataAsync(Dictionary<ushort, VariantValue> manufacturerData)
@@ -85,9 +94,12 @@ public abstract class AbstractDeviceListener : IDeviceListener
             }
 
             _aliveCounter = 0;
+            _logger.LogDebug("Property change received for device {DeviceAddress}", DeviceAddress);
+
             // Check if ManufacturerData property changed
             if (!changes.HasChanged(ManufacturerDataKeyName))
             {
+                _logger.LogDebug("Property change for {DeviceAddress} was not ManufacturerData, ignoring", DeviceAddress);
                 return;
             }
 

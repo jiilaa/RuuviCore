@@ -23,5 +23,5 @@ public class DataSavingOptions
     public TimeSpan BucketSize { get; set; }
 
     public override string ToString() =>
-        $"[Data saving interval: {DataSavingInterval}s, Calculate averages:{CalculateAverages}, Store acceleration:{StoreAcceleration}, Discard packets with min/max values:{DiscardMinMaxValues}]";
+        $"[Data saving interval: {DataSavingInterval}s, Calculate averages:{CalculateAverages}, Store acceleration:{StoreAcceleration}, Discard packets with min/max values:{DiscardMinMaxValues}, Bucket size:{BucketSize}]";
 }

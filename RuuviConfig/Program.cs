@@ -205,6 +205,8 @@ class Program
             await ruuviTag.AllowMeasurementsThroughGateway(true);
         }
 
+        Console.WriteLine($"RuuviTag {options.Name} registered successfully.");
+
         return 0;
     }
 }

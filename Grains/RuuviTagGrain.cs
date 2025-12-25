@@ -51,14 +51,15 @@ public class RuuviTagGrain : Grain, IRuuviTag
             throw new ArgumentException("MAC address does not match the actor primary key.");
         }
 
-        if (dataSavingOptions.BucketSize.Minutes >= 60)
+        var bucketMinutes = (int)dataSavingOptions.BucketSize.TotalMinutes;
+        if (bucketMinutes >= 60)
         {
-            if (dataSavingOptions.BucketSize.Minutes % 60 != 0)
+            if (bucketMinutes % 60 != 0)
             {
                 throw new ArgumentException("Bucket size must be in full hours if greater than 60 minutes.");
             }
         }
-        else if (60 % dataSavingOptions.BucketSize.Minutes != 0)
+        else if (bucketMinutes > 0 && 60 % bucketMinutes != 0)
         {
             throw new ArgumentException("Bucket size must divide evenly into 60 minutes if less than 60 minutes.");
         }
@@ -142,22 +143,13 @@ public class RuuviTagGrain : Grain, IRuuviTag
         if (_ruuviTagState.State.CalculateAverages)
         {
             AddMeasurementsToBucket(measurements);
+            // Don't push raw measurements when using averages - only averages are pushed via PublishCachedMeasurementsAsync
         }
         else if (TimeSpan.FromSeconds(_ruuviTagState.State.DataSavingInterval)
                  <= measurements.Timestamp - _lastPushTime)
         {
             _ruuviTagState.State.CachedMeasurements.Add(new CachedMeasurement(measurements));
             _lastPushTime = measurements.Timestamp;
-        }
-
-        var pushedSuccessfully = await PushDataAsync(measurements);
-        if (pushedSuccessfully)
-        {
-            _lastPushTime = measurements.Timestamp;
-        }
-        else
-        {
-            _logger.LogWarning("{Identity}: There was a problem sending the measurements.", GetIdentity());
         }
 
         await PublishCachedMeasurementsAsync();
@@ -307,6 +299,7 @@ public class RuuviTagGrain : Grain, IRuuviTag
             Humidity = measurements.Select(m => m.Humidity).Average(),
             Pressure = measurements.Select(m => m.Pressure).Average(),
             Temperature = measurements.Select(m => m.Temperature).Average(),
+            RSSI = (short)measurements.Select(m => (int)m.RSSI).Average(),
             Timestamp = timestamp,
             SequenceNumber = measurements.Last().SequenceNumber,
             MovementCounter = measurements.Last().MovementCounter
@@ -345,8 +338,10 @@ public class RuuviTagGrain : Grain, IRuuviTag
             return;
         }
 
-        _ruuviTagState.State.SignalStrength =
-            measurementEnvelope.SignalStrength.GetValueOrDefault(_ruuviTagState.State.SignalStrength);
+        if (measurementEnvelope.SignalStrength.HasValue)
+        {
+            _ruuviTagState.State.SignalStrength = measurementEnvelope.SignalStrength.Value;
+        }
 
         await StoreMeasurementDataAsync(
             measurementEnvelope.Timestamp,
