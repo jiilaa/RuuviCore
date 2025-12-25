@@ -24,18 +24,28 @@ RUN dotnet restore "RuuviCore/RuuviCore.csproj"
 # Copy everything
 COPY . .
 
-# Build and publish for ARM
+# Build and publish for target architecture
 WORKDIR "/src/RuuviCore"
-RUN dotnet publish "RuuviCore.csproj" \
-    -c Release \
-    -r linux-arm \
-    -p:PublishSingleFile=false \
-    -p:PublishTrimmed=false \
-    --self-contained false \
-    -o /app/publish
+RUN if [ "$TARGETARCH" = "arm64" ]; then \
+        dotnet publish "RuuviCore.csproj" \
+            -c Release \
+            -r linux-arm64 \
+            -p:PublishSingleFile=false \
+            -p:PublishTrimmed=false \
+            --self-contained false \
+            -o /app/publish; \
+    else \
+        dotnet publish "RuuviCore.csproj" \
+            -c Release \
+            -r linux-arm \
+            -p:PublishSingleFile=false \
+            -p:PublishTrimmed=false \
+            --self-contained false \
+            -o /app/publish; \
+    fi
 
-# Runtime stage - ARM32
-FROM mcr.microsoft.com/dotnet/aspnet:10.0-alpine3.23-arm32v7 AS runtime
+# Runtime stage - multi-arch
+FROM --platform=$TARGETPLATFORM mcr.microsoft.com/dotnet/aspnet:10.0-alpine AS runtime
 WORKDIR /app
 
 # Install Bluetooth/D-Bus packages
