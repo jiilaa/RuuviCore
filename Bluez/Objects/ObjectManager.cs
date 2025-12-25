@@ -16,7 +16,7 @@ public class ObjectManager : BluezObject
 
     public Task<Dictionary<ObjectPath, Dictionary<string, Dictionary<string, VariantValue>>>> GetManagedObjectsAsync()
     {
-        return Connection.CallMethodAsync(CreateMessage(), (m, s) => ReadMessage_aeoaesaesv(m, (BluezObject)s!), this);
+        return Connection.CallMethodAsync(CreateMessage(), (m, s) => ReadMessage_aeoaesaesv(m), this);
 
         MessageBuffer CreateMessage()
         {
@@ -40,7 +40,7 @@ public class ObjectManager : BluezObject
             Interface,
             Path,
             "InterfacesAdded",
-            (m, s) => ReadMessage_oaesaesv(m, (BluezObject)s!),
+            (m, s) => ReadMessage_oaesaesv(m),
             handler,
             emitOnCapturedContext,
             flags);
@@ -56,7 +56,7 @@ public class ObjectManager : BluezObject
             Interface,
             Path,
             "InterfacesRemoved",
-            (m, s) => ReadMessage_oas(m, (BluezObject)s!),
+            (m, s) => ReadMessage_oas(m),
             handler,
             emitOnCapturedContext,
             flags);

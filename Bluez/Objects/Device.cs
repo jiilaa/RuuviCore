@@ -206,133 +206,133 @@ public class Device : BluezObject
     public Task<string> GetAddressAsync()
         => Connection.CallMethodAsync(
             CreateGetPropertyMessage(Interface, "Address"),
-            (m, s) => ReadMessage_v_s(m, (BluezObject)s!),
+            (m, s) => ReadMessage_v_s(m),
             this);
 
     public Task<string> GetAddressTypeAsync()
         => Connection.CallMethodAsync(
             CreateGetPropertyMessage(Interface, "AddressType"),
-            (m, s) => ReadMessage_v_s(m, (BluezObject)s!),
+            (m, s) => ReadMessage_v_s(m),
             this);
 
     public Task<string> GetNameAsync()
         => Connection.CallMethodAsync(
             CreateGetPropertyMessage(Interface, "Name"),
-            (m, s) => ReadMessage_v_s(m, (BluezObject)s!),
+            (m, s) => ReadMessage_v_s(m),
             this);
 
     public Task<string> GetAliasAsync()
         => Connection.CallMethodAsync(
             CreateGetPropertyMessage(Interface, "Alias"),
-            (m, s) => ReadMessage_v_s(m, (BluezObject)s!),
+            (m, s) => ReadMessage_v_s(m),
             this);
 
     public Task<uint> GetClassAsync()
         => Connection.CallMethodAsync(
             CreateGetPropertyMessage(Interface, "Class"),
-            (m, s) => ReadMessage_v_u(m, (BluezObject)s!),
+            (m, s) => ReadMessage_v_u(m),
             this);
 
     public Task<ushort> GetAppearanceAsync()
         => Connection.CallMethodAsync(
             CreateGetPropertyMessage(Interface, "Appearance"),
-            (m, s) => ReadMessage_v_q(m, (BluezObject)s!),
+            (m, s) => ReadMessage_v_q(m),
             this);
 
     public Task<string> GetIconAsync()
         => Connection.CallMethodAsync(
             CreateGetPropertyMessage(Interface, "Icon"),
-            (m, s) => ReadMessage_v_s(m, (BluezObject)s!),
+            (m, s) => ReadMessage_v_s(m),
             this);
 
     public Task<bool> GetPairedAsync()
         => Connection.CallMethodAsync(
             CreateGetPropertyMessage(Interface, "Paired"),
-            (m, s) => ReadMessage_v_b(m, (BluezObject)s!),
+            (m, s) => ReadMessage_v_b(m),
             this);
 
     public Task<bool> GetBondedAsync()
         => Connection.CallMethodAsync(
             CreateGetPropertyMessage(Interface, "Bonded"),
-            (m, s) => ReadMessage_v_b(m, (BluezObject)s!),
+            (m, s) => ReadMessage_v_b(m),
             this);
 
     public Task<bool> GetTrustedAsync()
         => Connection.CallMethodAsync(
             CreateGetPropertyMessage(Interface, "Trusted"),
-            (m, s) => ReadMessage_v_b(m, (BluezObject)s!),
+            (m, s) => ReadMessage_v_b(m),
             this);
 
     public Task<bool> GetBlockedAsync()
         => Connection.CallMethodAsync(
             CreateGetPropertyMessage(Interface, "Blocked"),
-            (m, s) => ReadMessage_v_b(m, (BluezObject)s!),
+            (m, s) => ReadMessage_v_b(m),
             this);
 
     public Task<bool> GetLegacyPairingAsync()
         => Connection.CallMethodAsync(
             CreateGetPropertyMessage(Interface, "LegacyPairing"),
-            (m, s) => ReadMessage_v_b(m, (BluezObject)s!),
+            (m, s) => ReadMessage_v_b(m),
             this);
 
     public Task<short> GetRSSIAsync()
         => Connection.CallMethodAsync(
             CreateGetPropertyMessage(Interface, "RSSI"),
-            (m, s) => ReadMessage_v_n(m, (BluezObject)s!),
+            (m, s) => ReadMessage_v_n(m),
             this);
 
     public Task<bool> GetConnectedAsync()
         => Connection.CallMethodAsync(
             CreateGetPropertyMessage(Interface, "Connected"),
-            (m, s) => ReadMessage_v_b(m, (BluezObject)s!),
+            (m, s) => ReadMessage_v_b(m),
             this);
 
-    public Task<string[]> GetUUIDsAsync()
+    public Task<IReadOnlyCollection<string>> GetUUIDsAsync()
         => Connection.CallMethodAsync(
             CreateGetPropertyMessage(Interface, "UUIDs"),
-            (m, s) => ReadMessage_v_as(m, (BluezObject)s!),
+            (m, s) => ReadMessage_v_as(m),
             this);
 
     public Task<string> GetModaliasAsync()
         => Connection.CallMethodAsync(
             CreateGetPropertyMessage(Interface, "Modalias"),
-            (m, s) => ReadMessage_v_s(m, (BluezObject)s!),
+            (m, s) => ReadMessage_v_s(m),
             this);
 
     public Task<ObjectPath> GetAdapterAsync()
         => Connection.CallMethodAsync(
             CreateGetPropertyMessage(Interface, "Adapter"),
-            (m, s) => ReadMessage_v_o(m, (BluezObject)s!),
+            (m, s) => ReadMessage_v_o(m),
             this);
 
     public Task<Dictionary<ushort, VariantValue>> GetManufacturerDataAsync()
         => Connection.CallMethodAsync(
             CreateGetPropertyMessage(Interface, "ManufacturerData"),
-            (m, s) => ReadMessage_v_aeqv(m, (BluezObject)s!),
+            (m, s) => ReadMessage_v_aeqv(m),
             this);
 
     public Task<Dictionary<string, VariantValue>> GetServiceDataAsync()
         => Connection.CallMethodAsync(
             CreateGetPropertyMessage(Interface, "ServiceData"),
-            (m, s) => ReadMessage_v_aesv(m, (BluezObject)s!),
+            (m, s) => ReadMessage_v_aesv(m),
             this);
 
     public Task<short> GetTxPowerAsync()
         => Connection.CallMethodAsync(
             CreateGetPropertyMessage(Interface, "TxPower"),
-            (m, s) => ReadMessage_v_n(m, (BluezObject)s!),
+            (m, s) => ReadMessage_v_n(m),
             this);
 
     public Task<bool> GetServicesResolvedAsync()
         => Connection.CallMethodAsync(
             CreateGetPropertyMessage(Interface, "ServicesResolved"),
-            (m, s) => ReadMessage_v_b(m, (BluezObject)s!),
+            (m, s) => ReadMessage_v_b(m),
             this);
 
     public Task<bool> GetWakeAllowedAsync()
         => Connection.CallMethodAsync(
             CreateGetPropertyMessage(Interface, "WakeAllowed"),
-            (m, s) => ReadMessage_v_b(m, (BluezObject)s!),
+            (m, s) => ReadMessage_v_b(m),
             this);
 
     public Task<DeviceProperties> GetPropertiesAsync()

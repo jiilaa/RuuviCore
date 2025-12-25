@@ -57,7 +57,7 @@ public class LowEnergyAdvertisingManager : BluezObject
     {
         return Connection.CallMethodAsync(
             CreateGetPropertyMessage(Interface, "ActiveInstances"),
-            (m, s) => ReadMessage_v_y(m, (BluezObject)s!),
+            (m, s) => ReadMessage_v_y(m),
             this);
     }
 
@@ -65,23 +65,23 @@ public class LowEnergyAdvertisingManager : BluezObject
     {
         return Connection.CallMethodAsync(
             CreateGetPropertyMessage(Interface, "SupportedInstances"),
-            (m, s) => ReadMessage_v_y(m, (BluezObject)s!),
+            (m, s) => ReadMessage_v_y(m),
             this);
     }
 
-    public Task<string[]> GetSupportedIncludesAsync()
+    public Task<IReadOnlyCollection<string>> GetSupportedIncludesAsync()
     {
         return Connection.CallMethodAsync(
             CreateGetPropertyMessage(Interface, "SupportedIncludes"),
-            (m, s) => ReadMessage_v_as(m, (BluezObject)s!),
+            (m, s) => ReadMessage_v_as(m),
             this);
     }
 
-    public Task<string[]> GetSupportedSecondaryChannelsAsync()
+    public Task<IReadOnlyCollection<string>> GetSupportedSecondaryChannelsAsync()
     {
         return Connection.CallMethodAsync(
             CreateGetPropertyMessage(Interface, "SupportedSecondaryChannels"),
-            (m, s) => ReadMessage_v_as(m, (BluezObject)s!),
+            (m, s) => ReadMessage_v_as(m),
             this);
     }
 

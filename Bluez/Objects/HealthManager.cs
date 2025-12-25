@@ -14,7 +14,7 @@ public class HealthManager : BluezObject
 
     public Task<ObjectPath> CreateApplicationAsync(Dictionary<string, VariantValue> config)
     {
-        return Connection.CallMethodAsync(CreateMessage(), (m, s) => ReadMessage_o(m, (BluezObject)s!), this);
+        return Connection.CallMethodAsync(CreateMessage(), (m, s) => ReadMessage_o(m), this);
 
         MessageBuffer CreateMessage()
         {

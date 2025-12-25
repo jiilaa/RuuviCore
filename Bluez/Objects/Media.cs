@@ -127,9 +127,9 @@ public class Media : BluezObject
         }
     }
 
-    public Task<string[]> GetSupportedUUIDsAsync()
+    public Task<IReadOnlyCollection<string>> GetSupportedUUIDsAsync()
     {
-        return Connection.CallMethodAsync(CreateGetPropertyMessage(Interface, "SupportedUUIDs"), (m, s) => ReadMessage_v_as(m, (BluezObject)s!), this);
+        return Connection.CallMethodAsync(CreateGetPropertyMessage(Interface, "SupportedUUIDs"), (m, s) => ReadMessage_v_as(m), this);
     }
 
     public Task<MediaProperties> GetPropertiesAsync()

@@ -84,7 +84,7 @@ public class Adapter : BluezObject
 
     public Task<string[]> GetDiscoveryFiltersAsync()
     {
-        return Connection.CallMethodAsync(CreateMessage(), (m, s) => ReadMessage_as(m, (BluezObject)s!), this);
+        return Connection.CallMethodAsync(CreateMessage(), (m, s) => ReadMessage_as(m), this);
 
         MessageBuffer CreateMessage()
         {
@@ -226,77 +226,77 @@ public class Adapter : BluezObject
 
     public Task<string> GetAddressAsync()
     {
-        return Connection.CallMethodAsync(CreateGetPropertyMessage(Interface, "Address"), (m, s) => ReadMessage_v_s(m, (BluezObject)s!), this);
+        return Connection.CallMethodAsync(CreateGetPropertyMessage(Interface, "Address"), (m, s) => ReadMessage_v_s(m), this);
     }
 
     public Task<string> GetAddressTypeAsync()
     {
-        return Connection.CallMethodAsync(CreateGetPropertyMessage(Interface, "AddressType"), (m, s) => ReadMessage_v_s(m, (BluezObject)s!), this);
+        return Connection.CallMethodAsync(CreateGetPropertyMessage(Interface, "AddressType"), (m, s) => ReadMessage_v_s(m), this);
     }
 
     public Task<string> GetNameAsync()
     {
-        return Connection.CallMethodAsync(CreateGetPropertyMessage(Interface, "Name"), (m, s) => ReadMessage_v_s(m, (BluezObject)s!), this);
+        return Connection.CallMethodAsync(CreateGetPropertyMessage(Interface, "Name"), (m, s) => ReadMessage_v_s(m), this);
     }
 
     public Task<string> GetAliasAsync()
     {
-        return Connection.CallMethodAsync(CreateGetPropertyMessage(Interface, "Alias"), (m, s) => ReadMessage_v_s(m, (BluezObject)s!), this);
+        return Connection.CallMethodAsync(CreateGetPropertyMessage(Interface, "Alias"), (m, s) => ReadMessage_v_s(m), this);
     }
 
     public Task<uint> GetClassAsync()
     {
-        return Connection.CallMethodAsync(CreateGetPropertyMessage(Interface, "Class"), (m, s) => ReadMessage_v_u(m, (BluezObject)s!), this);
+        return Connection.CallMethodAsync(CreateGetPropertyMessage(Interface, "Class"), (m, s) => ReadMessage_v_u(m), this);
     }
 
     public Task<bool> GetPoweredAsync()
     {
-        return Connection.CallMethodAsync(CreateGetPropertyMessage(Interface, "Powered"), (m, s) => ReadMessage_v_b(m, (BluezObject)s!), this);
+        return Connection.CallMethodAsync(CreateGetPropertyMessage(Interface, "Powered"), (m, s) => ReadMessage_v_b(m), this);
     }
 
     public Task<bool> GetDiscoverableAsync()
     {
-        return Connection.CallMethodAsync(CreateGetPropertyMessage(Interface, "Discoverable"), (m, s) => ReadMessage_v_b(m, (BluezObject)s!), this);
+        return Connection.CallMethodAsync(CreateGetPropertyMessage(Interface, "Discoverable"), (m, s) => ReadMessage_v_b(m), this);
     }
 
     public Task<uint> GetDiscoverableTimeoutAsync()
     {
-        return Connection.CallMethodAsync(CreateGetPropertyMessage(Interface, "DiscoverableTimeout"), (m, s) => ReadMessage_v_u(m, (BluezObject)s!), this);
+        return Connection.CallMethodAsync(CreateGetPropertyMessage(Interface, "DiscoverableTimeout"), (m, s) => ReadMessage_v_u(m), this);
     }
 
     public Task<bool> GetPairableAsync()
     {
-        return Connection.CallMethodAsync(CreateGetPropertyMessage(Interface, "Pairable"), (m, s) => ReadMessage_v_b(m, (BluezObject)s!), this);
+        return Connection.CallMethodAsync(CreateGetPropertyMessage(Interface, "Pairable"), (m, s) => ReadMessage_v_b(m), this);
     }
 
     public Task<uint> GetPairableTimeoutAsync()
     {
-        return Connection.CallMethodAsync(CreateGetPropertyMessage(Interface, "PairableTimeout"), (m, s) => ReadMessage_v_u(m, (BluezObject)s!), this);
+        return Connection.CallMethodAsync(CreateGetPropertyMessage(Interface, "PairableTimeout"), (m, s) => ReadMessage_v_u(m), this);
     }
 
     public Task<bool> GetDiscoveringAsync()
     {
-        return Connection.CallMethodAsync(CreateGetPropertyMessage(Interface, "Discovering"), (m, s) => ReadMessage_v_b(m, (BluezObject)s!), this);
+        return Connection.CallMethodAsync(CreateGetPropertyMessage(Interface, "Discovering"), (m, s) => ReadMessage_v_b(m), this);
     }
 
-    public Task<string[]> GetUUIDsAsync()
+    public Task<IReadOnlyCollection<string>> GetUUIDsAsync()
     {
-        return Connection.CallMethodAsync(CreateGetPropertyMessage(Interface, "UUIDs"), (m, s) => ReadMessage_v_as(m, (BluezObject)s!), this);
+        return Connection.CallMethodAsync(CreateGetPropertyMessage(Interface, "UUIDs"), (m, s) => ReadMessage_v_as(m), this);
     }
 
     public Task<string> GetModaliasAsync()
     {
-        return Connection.CallMethodAsync(CreateGetPropertyMessage(Interface, "Modalias"), (m, s) => ReadMessage_v_s(m, (BluezObject)s!), this);
+        return Connection.CallMethodAsync(CreateGetPropertyMessage(Interface, "Modalias"), (m, s) => ReadMessage_v_s(m), this);
     }
 
-    public Task<string[]> GetRolesAsync()
+    public Task<IReadOnlyCollection<string>> GetRolesAsync()
     {
-        return Connection.CallMethodAsync(CreateGetPropertyMessage(Interface, "Roles"), (m, s) => ReadMessage_v_as(m, (BluezObject)s!), this);
+        return Connection.CallMethodAsync(CreateGetPropertyMessage(Interface, "Roles"), (m, s) => ReadMessage_v_as(m), this);
     }
 
-    public Task<string[]> GetExperimentalFeaturesAsync()
+    public Task<IReadOnlyCollection<string>> GetExperimentalFeaturesAsync()
     {
-        return Connection.CallMethodAsync(CreateGetPropertyMessage(Interface, "ExperimentalFeatures"), (m, s) => ReadMessage_v_as(m, (BluezObject)s!), this);
+        return Connection.CallMethodAsync(CreateGetPropertyMessage(Interface, "ExperimentalFeatures"), (m, s) => ReadMessage_v_as(m), this);
     }
 
     public Task<AdapterProperties> GetPropertiesAsync()
