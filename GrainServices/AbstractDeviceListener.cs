@@ -1,98 +1,119 @@
 using System;
-using System.Collections;
 using System.Collections.Generic;
-using System.Linq;
 using System.Threading.Tasks;
-using bluez.DBus;
 using Microsoft.Extensions.Logging;
+using net.jommy.RuuviCore.Bluez.Models;
+using net.jommy.RuuviCore.Bluez.Objects;
 using Orleans;
-using Tmds.DBus;
+using Tmds.DBus.Protocol;
 
-namespace net.jommy.RuuviCore.GrainServices
+namespace net.jommy.RuuviCore.GrainServices;
+
+public abstract class AbstractDeviceListener : IDeviceListener
 {
-    public abstract class AbstractDeviceListener : IDeviceListener
-    {
-        private const int AliveThreshold = 60; 
-        private const string SignalStrengthKeyName = "RSSI";
-        private const string ManufacturerDataKeyName = "ManufacturerData";
+    private const int AliveThreshold = 60;
+    private const string ManufacturerDataKeyName = "ManufacturerData";
 
-        private readonly IDevice1 _device;
-        private IDisposable _propertiesWatcher;
-        private int _aliveCounter;
+    private readonly Device _device;
+    private IDisposable _propertiesWatcher;
+    private int _aliveCounter;
 
-        protected readonly string DeviceAddress;
-        protected readonly IGrainFactory GrainFactory;
-        private readonly ILogger _logger;
+    protected readonly string DeviceAddress;
+    protected readonly IGrainFactory GrainFactory;
+    private readonly ILogger _logger;
 
-        protected abstract Task HandlePropertiesChanged(byte[] manufacturerData, short? signalStrength);
+    protected abstract Task HandlePropertiesChanged(byte[] manufacturerData, short? signalStrength);
 
-        protected abstract Task OnStartListening();
+    protected abstract Task OnStartListening();
         
-        protected abstract ushort ManufacturerKey { get; }
+    protected abstract ushort ManufacturerKey { get; }
 
-        protected AbstractDeviceListener(IDevice1 device, string deviceAddress, IGrainFactory grainFactory, ILogger logger)
+    protected AbstractDeviceListener(Device device, string deviceAddress, IGrainFactory grainFactory, ILogger logger)
+    {
+        _device = device;
+        DeviceAddress = deviceAddress;
+        GrainFactory = grainFactory;
+        _logger = logger;
+    }
+
+    /// <inheritdoc />
+    public void Dispose()
+    {
+        GC.SuppressFinalize(this);
+        _propertiesWatcher?.Dispose();
+    }
+
+    /// <inheritdoc />
+    public async Task StartListeningAsync()
+    {
+        await OnStartListening();
+        _propertiesWatcher = await _device.WatchPropertiesChangedAsync(OnPropertiesChanged);
+    }
+
+    public bool IsAlive()
+    {
+        _aliveCounter++;
+        return _aliveCounter <= AliveThreshold;
+    }
+
+    private async Task<short?> GetSignalStrength()
+    {
+        try
         {
-            _device = device;
-            DeviceAddress = deviceAddress;
-            GrainFactory = grainFactory;
-            _logger = logger;
+            return await _device.GetRSSIAsync();
         }
-
-        /// <inheritdoc />
-        public void Dispose()
+        catch (DBusException ex) when (ex.ErrorName?.Contains("InvalidArgs") == true)
         {
-            GC.SuppressFinalize(this);
-            _propertiesWatcher?.Dispose();
+            // RSSI property not available yet (common during initial device discovery)
+            _logger.LogDebug("RSSI not available for device {DeviceAddress}: {ErrorMessage}", DeviceAddress, ex.Message);
+            return null;
         }
+    }
 
-        /// <inheritdoc />
-        public async Task StartListeningAsync()
+    public async Task HandleDataAsync(Dictionary<ushort, VariantValue> manufacturerData)
+    {
+        if (manufacturerData.TryGetValue(ManufacturerKey, out var variantValue))
         {
-            await OnStartListening();
-            _propertiesWatcher = await _device.WatchPropertiesAsync(OnPropertiesChanged);
+            var bytes = variantValue.GetArray<byte>();
+            var signalStrength = await GetSignalStrength();
+            await HandlePropertiesChanged(bytes, signalStrength);
         }
+    }
 
-        public bool IsAlive()
-        {
-            _aliveCounter++;
-            return _aliveCounter <= AliveThreshold;
-        }
+    private async void OnPropertiesChanged(Exception ex, PropertyChanges<DeviceProperties> changes)
+    {
+        // Async void is a big no-no, but Tmds.DBus doesn't provide a Task based way to do this,
+        // so pokemon-catch all exceptions to avoid crashing the whole application
 
-        private Task<short> GetSignalStrength()
+        try
         {
-            return _device.GetAsync<short>(SignalStrengthKeyName);
-        }
-
-        public async Task HandleDataAsync(IDictionary<ushort, object> manufacturerData)
-        {
-            if (manufacturerData.TryGetValue(ManufacturerKey, out var bytes))
+            if (ex != null)
             {
-                await HandlePropertiesChanged((byte[])bytes, null);
+                _logger.LogError(ex, "Error in property change for device {DeviceAddress}: {ErrorMessage}", DeviceAddress, ex.Message);
+                return;
             }
-        }
 
-        private async void OnPropertiesChanged(PropertyChanges changes)
-        {
             _aliveCounter = 0;
-            try
-            {
-                var manufacturerDataChange = changes.Changed.FirstOrDefault(c => c.Key == ManufacturerDataKeyName);
-                if (manufacturerDataChange.Value == null)
-                {
-                    return;
-                }
+            _logger.LogDebug("Property change received for device {DeviceAddress}", DeviceAddress);
 
-                var dict = (IDictionary)manufacturerDataChange.Value;
-                if (dict.Contains(ManufacturerKey))
-                {
-                    var signalStrength = await GetSignalStrength();
-                    await HandlePropertiesChanged((byte[]) dict[ManufacturerKey], signalStrength);
-                }
-            }
-            catch (Exception e)
+            // Check if ManufacturerData property changed
+            if (!changes.HasChanged(ManufacturerDataKeyName))
             {
-                _logger.LogError("Failed to handle properties changed event for device {deviceAddress}: {error}", DeviceAddress, e.Message);
+                _logger.LogDebug("Property change for {DeviceAddress} was not ManufacturerData, ignoring", DeviceAddress);
+                return;
             }
+
+            var manufacturerData = changes.Properties.ManufacturerData;
+            if (manufacturerData != null && manufacturerData.TryGetValue(ManufacturerKey, out var variantValue))
+            {
+                var signalStrength = await GetSignalStrength();
+                var bytes = variantValue.GetArray<byte>();
+                await HandlePropertiesChanged(bytes, signalStrength);
+            }
+        }
+        catch (Exception e)
+        {
+            _logger.LogError("Failed to handle properties changed event for device {DeviceAddress}: {Error}", DeviceAddress, e.Message);
         }
     }
 }

@@ -1,396 +1,362 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.ComponentModel;
 using System.Linq;
-using System.Text;
-using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.Azure.Devices.Client;
-using Microsoft.Azure.Devices.Provisioning.Client;
-using Microsoft.Azure.Devices.Provisioning.Client.Transport;
-using Microsoft.Azure.Devices.Shared;
+
 using Microsoft.Extensions.Logging;
+
 using net.jommy.RuuviCore.Common;
 using net.jommy.RuuviCore.Grains.DataParsers;
 using net.jommy.RuuviCore.Interfaces;
+
 using Orleans;
 using Orleans.Runtime;
-using Orleans.Streams;
-using Serilog;
 
-namespace net.jommy.RuuviCore.Grains
+namespace net.jommy.RuuviCore.Grains;
+
+[GrainType(Constants.GrainTypeRuuviTag)]
+public class RuuviTagGrain : Grain, IRuuviTag
 {
-    [ImplicitStreamSubscription("MeasurementStream")]
-    public class RuuviTagGrain : Grain, IRuuviTag, IAsyncObserver<MeasurementEnvelope>
+    private readonly IPersistentState<RuuviTagState> _ruuviTagState;
+    private readonly ILogger<RuuviTagGrain> _logger;
+    private DateTime _lastPushTime = DateTime.MinValue;
+
+    public RuuviTagGrain(
+        [PersistentState(nameof(RuuviTagState), RuuviCoreConstants.GrainStorageName)]
+        IPersistentState<RuuviTagState> ruuviTagState,
+        ILogger<RuuviTagGrain> logger)
     {
-        private readonly IPersistentState<RuuviTagState> _ruuviTagState;
-        private readonly ILogger<RuuviTagGrain> _logger;
-        private const string GlobalDeviceEndpoint = "global.azure-devices-provisioning.net";
-        private DeviceClient _azureClient;
-        private DateTime _lastPushTime = DateTime.MinValue;
+        _ruuviTagState = ruuviTagState;
+        _logger = logger;
+    }
 
-        public RuuviTagGrain(
-            [PersistentState(nameof(RuuviTagState), RuuviCoreConstants.GrainStorageName)]
-            IPersistentState<RuuviTagState> ruuviTagState,
-            ILogger<RuuviTagGrain> logger)
+    public override async Task OnActivateAsync(CancellationToken cancellationToken)
+    {
+        await GrainFactory.GetGrain<IRuuviTagRegistry>(0)
+            .AddOrUpdate(this.GetPrimaryKeyString(), _ruuviTagState.State.Name);
+    }
+
+    public override async Task OnDeactivateAsync(DeactivationReason reason, CancellationToken cancellationToken)
+    {
+        // Lazy attempt to save the latest signal strength, doesn't matter too much if it fails.
+        // Everything else is saved when data is changed
+        await _ruuviTagState.WriteStateAsync(cancellationToken);
+    }
+
+    public async Task Initialize(string macAddress, string name, DataSavingOptions dataSavingOptions)
+    {
+        if (macAddress != this.GetPrimaryKeyString())
         {
-            _ruuviTagState = ruuviTagState;
-            _logger = logger;
+            throw new ArgumentException("MAC address does not match the actor primary key.");
         }
 
-        public override async Task OnActivateAsync()
+        var bucketMinutes = (int)dataSavingOptions.BucketSize.TotalMinutes;
+        if (bucketMinutes >= 60)
         {
-            if (_ruuviTagState.State.UseAzure)
+            if (bucketMinutes % 60 != 0)
             {
-                _azureClient = await ConnectToAzureIoT();
-                if (_azureClient == null)
-                {
-                    _logger.LogError("Could not initialize the connection to Azure IoT. Disabling the connection.");
-                    _ruuviTagState.State.UseAzure = false;
-                }
+                throw new ArgumentException("Bucket size must be in full hours if greater than 60 minutes.");
             }
-
-            var streamProvider = GetStreamProvider(RuuviCoreConstants.StreamProviderName);
-            var stream = streamProvider.GetStream<MeasurementEnvelope>(this.GetPrimaryKey(), "MeasurementStream");
-            await stream.SubscribeAsync(this);
+        }
+        else if (bucketMinutes > 0 && 60 % bucketMinutes != 0)
+        {
+            throw new ArgumentException("Bucket size must divide evenly into 60 minutes if less than 60 minutes.");
         }
 
-        public override async Task OnDeactivateAsync()
-        {
-            // Lazy attempt to save the latest signal strength, doesn't matter too much if it fails.
-            // Everything else is saved when data is changed
-            await _ruuviTagState.WriteStateAsync();
-        }
+        _ruuviTagState.State.MacAddress = macAddress;
+        _ruuviTagState.State.Name = name;
+        _ruuviTagState.State.DataSavingInterval = dataSavingOptions.DataSavingInterval;
+        _ruuviTagState.State.CalculateAverages = dataSavingOptions.CalculateAverages;
+        _ruuviTagState.State.StoreAcceleration = dataSavingOptions.StoreAcceleration;
+        _ruuviTagState.State.DiscardMinMaxValues = dataSavingOptions.DiscardMinMaxValues;
+        _ruuviTagState.State.BucketSize = dataSavingOptions.BucketSize;
+        _ruuviTagState.State.Initialized = true;
+        await _ruuviTagState.WriteStateAsync();
+        await GrainFactory.GetGrain<IRuuviTagRegistry>(0).AddOrUpdate(macAddress, name);
+    }
 
-        public async Task Initialize(string macAddress, string name, DataSavingOptions dataSavingOptions, List<string> bridges)
-        {
-            if (macAddress.ToActorGuid() != this.GetPrimaryKey())
-            {
-                throw new ArgumentException("MAC address does not match the actor primary key.");
-            }
-            
-            _ruuviTagState.State.MacAddress = macAddress;
-            _ruuviTagState.State.Name = name;
-            _ruuviTagState.State.DataSavingInterval = dataSavingOptions.DataSavingInterval;
-            _ruuviTagState.State.CalculateAverages = dataSavingOptions.CalculateAverages;
-            _ruuviTagState.State.StoreAcceleration = dataSavingOptions.StoreAcceleration;
-            _ruuviTagState.State.DiscardMinMaxValues = dataSavingOptions.DiscardMinMaxValues;
-            _ruuviTagState.State.Initialized = true;
-            
-            if (bridges != null && bridges.Any())
-            {
-                await CheckBridgesAsync(bridges);
-                _ruuviTagState.State.Bridges = bridges;
-            }
-            
-            await _ruuviTagState.WriteStateAsync();
-            await GrainFactory.GetGrain<IRuuviTagRegistry>(0).AddOrUpdate(macAddress, name);
-        }
+    public async Task SetName(string name)
+    {
+        _ruuviTagState.State.Name = name;
+        await _ruuviTagState.WriteStateAsync();
+        await GrainFactory.GetGrain<IRuuviTagRegistry>(0).AddOrUpdate(_ruuviTagState.State.MacAddress, name);
+    }
 
-        public async Task SetName(string name)
-        {
-            _ruuviTagState.State.Name = name;
-            await _ruuviTagState.WriteStateAsync();
-            await GrainFactory.GetGrain<IRuuviTagRegistry>(0).AddOrUpdate(_ruuviTagState.State.MacAddress, name);
-        }
+    public Task<string> GetName()
+    {
+        return Task.FromResult(_ruuviTagState.State.Name);
+    }
 
-        public Task<string> GetName()
-        {
-            return Task.FromResult(_ruuviTagState.State.Name);
-        }
-
-        public Task<DataSavingOptions> GetDataSavingOptions()
-        {
-            return Task.FromResult(new DataSavingOptions
+    public Task<DataSavingOptions> GetDataSavingOptions()
+    {
+        return Task.FromResult(
+            new DataSavingOptions
             {
                 CalculateAverages = _ruuviTagState.State.CalculateAverages,
                 DataSavingInterval = _ruuviTagState.State.DataSavingInterval,
                 StoreAcceleration = _ruuviTagState.State.StoreAcceleration
             });
+    }
+
+    public async Task SetDataSavingOptions(DataSavingOptions options)
+    {
+        if (options.BucketSize.Minutes >= 60)
+        {
+            if (options.BucketSize.Minutes % 60 != 0)
+            {
+                throw new ArgumentException("Bucket size must be in full hours if greater than 60 minutes.");
+            }
+        }
+        else if (60 % options.BucketSize.Minutes != 0)
+        {
+            throw new ArgumentException("Bucket size must divide evenly into 60 minutes if less than 60 minutes.");
         }
 
-        public async Task SetDataSavingOptions(DataSavingOptions options)
+        _ruuviTagState.State.DataSavingInterval = options.DataSavingInterval;
+        _ruuviTagState.State.CalculateAverages = options.CalculateAverages;
+        _ruuviTagState.State.StoreAcceleration = options.StoreAcceleration;
+        _ruuviTagState.State.BucketSize = options.BucketSize;
+        await _ruuviTagState.WriteStateAsync();
+    }
+
+    public async Task StoreMeasurementData(MeasurementDTO measurements)
+    {
+        _logger.LogDebug(
+            "{Identity}: Received measurements with timestamp {timestamp} and sequence number {sequenceNumber}",
+            GetIdentity(),
+            measurements.Timestamp,
+            measurements.SequenceNumber);
+
+        // We are no longer interested if older values have already been pushed.
+        if (measurements.Timestamp < _lastPushTime)
         {
-            _ruuviTagState.State.DataSavingInterval = options.DataSavingInterval;
-            _ruuviTagState.State.CalculateAverages = options.CalculateAverages;
-            _ruuviTagState.State.StoreAcceleration = options.StoreAcceleration;
+            return;
+        }
+
+        // Gateway reports the acceleration values, so drop them if saving is not wanted
+        if (!_ruuviTagState.State.StoreAcceleration)
+        {
+            measurements.Acceleration = null;
+        }
+
+        if (_ruuviTagState.State.CalculateAverages)
+        {
+            AddMeasurementsToBucket(measurements);
+            // Don't push raw measurements when using averages - only averages are pushed via PublishCachedMeasurementsAsync
+        }
+        else if (TimeSpan.FromSeconds(_ruuviTagState.State.DataSavingInterval)
+                 <= measurements.Timestamp - _lastPushTime)
+        {
+            _ruuviTagState.State.CachedMeasurements.Add(new CachedMeasurement(measurements));
+            _lastPushTime = measurements.Timestamp;
+        }
+
+        await PublishCachedMeasurementsAsync();
+    }
+
+    private async Task PublishCachedMeasurementsAsync()
+    {
+        foreach (var cachedMeasurement in _ruuviTagState.State.CachedMeasurements.Where(cm => !cm.Sent))
+        {
+            var pushedSuccessfully = await PushDataAsync(cachedMeasurement.Measurement);
+            if (pushedSuccessfully)
+            {
+                cachedMeasurement.Sent = true;
+            }
+            else
+            {
+                _logger.LogWarning("{Identity}: Failed to push measurement, storing it to cache to try again later.", GetIdentity());
+                break;
+            }
+        }
+
+        // Remove sent averages
+        _ruuviTagState.State.CachedMeasurements.RemoveAll(b => b.Sent);
+    }
+
+    private async Task StoreMeasurementDataAsync(DateTime timeStamp, short signalStrength, byte[] data)
+    {
+        var valid = TryParseMeasurements(data, _ruuviTagState.State.DiscardMinMaxValues, out var measurements);
+        if (!valid)
+        {
+            _logger.LogError("{Identity}: Discarding packet data with invalid values.", GetIdentity());
+            return;
+        }
+
+        measurements.Timestamp = timeStamp;
+        measurements.RSSI = signalStrength;
+
+        await StoreMeasurementData(measurements);
+    }
+
+    private async Task<bool> PushDataAsync(MeasurementDTO measurements)
+    {
+        _logger.LogInformation("{Identity}: Saving measurements: {measurements}", GetIdentity(), measurements);
+
+        var result = await GrainFactory.GetGrain<IInfluxBridge>(0)
+            .WriteMeasurements(
+                _ruuviTagState.State.MacAddress,
+                _ruuviTagState.State.StoreName ? _ruuviTagState.State.Name : null,
+                measurements);
+
+        return result;
+    }
+
+    public Task<List<MeasurementDTO>> GetCachedMeasurements()
+    {
+        return Task.FromResult(_ruuviTagState.State.CurrentBucketMeasurements);
+    }
+
+    public Task<bool> MeasurementsAllowedThroughGateway()
+    {
+        return Task.FromResult(_ruuviTagState.State.AllowMeasurementsThroughGateway);
+    }
+
+    public async Task AllowMeasurementsThroughGateway(bool allowed)
+    {
+        var existingValue = _ruuviTagState.State.AllowMeasurementsThroughGateway;
+        _ruuviTagState.State.AllowMeasurementsThroughGateway = allowed;
+
+        // Raspberry Pi optimization, no unnecessary writes to SD card.
+        if (allowed != existingValue)
+        {
             await _ruuviTagState.WriteStateAsync();
         }
+    }
 
-        public async Task StoreMeasurementData(Measurements measurements)
+    private TimeSpan GetBucketSize()
+    {
+        if (_ruuviTagState.State.BucketSize == TimeSpan.Zero)
         {
-            _logger.LogDebug("{Identity}: Received measurements with timestamp {timestamp} and sequence number {sequenceNumber}", GetIdentity(), measurements.Timestamp, measurements.SequenceNumber);
+            _logger.LogWarning("{Identity}: Bucket size is zero, defaulting to 1 hour", GetIdentity());
+            _ruuviTagState.State.BucketSize = TimeSpan.FromHours(1);
+        }
 
-            // We are no longer interested if older values have already been pushed.
-            if (measurements.Timestamp < _lastPushTime)
+        return _ruuviTagState.State.BucketSize;
+    }
+
+    private void AddMeasurementsToBucket(MeasurementDTO measurements)
+    {
+        var bucketSize = GetBucketSize();
+
+        // Initialize first bucket
+        if (_ruuviTagState.State.CurrentBucketStartTime == null)
+        {
+            _ruuviTagState.State.CurrentBucketStartTime = GetBucketStartTime(measurements.Timestamp, bucketSize);
+            _ruuviTagState.State.CurrentBucketMeasurements = [];
+        }
+
+        if (measurements.Timestamp < _ruuviTagState.State.CurrentBucketStartTime)
+        {
+            // Old measurement, ignore
+            return;
+        }
+
+        var currentBucketEnd = _ruuviTagState.State.CurrentBucketStartTime.Value + bucketSize;
+
+        // Check if measurement belongs to current bucket
+        if (measurements.Timestamp >= currentBucketEnd)
+        {
+            // Bucket expired - calculate average and store it
+            if (_ruuviTagState.State.CurrentBucketMeasurements.Count > 0)
             {
-                return;
+                var bucketAverage = CalculateAverageMeasurements(
+                    _ruuviTagState.State.CurrentBucketMeasurements,
+                    _ruuviTagState.State.CurrentBucketStartTime.Value); // Use bucket start time as timestamp
+
+                _ruuviTagState.State.CachedMeasurements ??= [];
+                _ruuviTagState.State.CachedMeasurements.Add(
+                    new CachedMeasurement { Sent = false, Measurement = bucketAverage });
             }
 
-            // Gateway reports the acceleration values, so drop them if saving is not wanted
-            if (!_ruuviTagState.State.StoreAcceleration)
-            {
-                measurements.Acceleration = null;
-            }
-
-            if (_ruuviTagState.State.CalculateAverages)
-            {
-                AddMeasurements(measurements);
-            }
-            if (TimeSpan.FromSeconds(_ruuviTagState.State.DataSavingInterval) <= (measurements.Timestamp - _lastPushTime))
-            {
-                var pushedSuccessfully = await PushDataAsync(measurements);
-                if (pushedSuccessfully)
-                {
-                    _logger.LogDebug("{Identity}: Measurements sent successfully.", GetIdentity());
-                    if (_ruuviTagState.State.CalculateAverages)
-                    {
-                        _ruuviTagState.State.LatestMeasurements.Clear();
-                    }
-                    _lastPushTime = measurements.Timestamp;
-                }
-                else
-                {
-                    _logger.LogWarning("{Identity}: There was a problem sending the measurements.", GetIdentity());
-                }
-            }
+            // Start new bucket
+            _ruuviTagState.State.CurrentBucketStartTime = GetBucketStartTime(measurements.Timestamp, bucketSize);
+            _ruuviTagState.State.CurrentBucketMeasurements = [];
         }
 
-        private async Task StoreMeasurementDataAsync(DateTime timeStamp, short signalStrength, byte[] data)
-        {
-            var valid = TryParseMeasurements(data, _ruuviTagState.State.DiscardMinMaxValues, out var measurements);
-            if (!valid)
-            {
-                _logger.LogError("{Identity}: Discarding packet data with invalid values.", GetIdentity());
-                return;
-            }
-            measurements.Timestamp = timeStamp;
-            measurements.RSSI = signalStrength;
+        // Add measurement to current bucket
+        _ruuviTagState.State.CurrentBucketMeasurements.Add(measurements);
+    }
 
-            await StoreMeasurementData(measurements);
+    // Align bucket start times to fixed intervals
+    private static DateTime GetBucketStartTime(DateTime timestamp, TimeSpan bucketSize)
+    {
+        var ticks = timestamp.Ticks / bucketSize.Ticks;
+        return new DateTime(ticks * bucketSize.Ticks, timestamp.Kind);
+    }
+
+    private static MeasurementDTO CalculateAverageMeasurements(List<MeasurementDTO> measurements, DateTime timestamp)
+    {
+        if (measurements == null || measurements.Count == 0)
+        {
+            return null;
         }
 
-        private async Task<bool> PushDataAsync(Measurements measurements)
+        var averageMeasurements = new MeasurementDTO
         {
-            // TODO: Implement logic to push old data too if influxDB hasn't been reachable during the last attempt.
-            measurements = _ruuviTagState.State.CalculateAverages ? CalculateAverageMeasurements() : measurements;
+            BatteryVoltage = measurements.Last().BatteryVoltage,
+            Humidity = measurements.Select(m => m.Humidity).Average(),
+            Pressure = measurements.Select(m => m.Pressure).Average(),
+            Temperature = measurements.Select(m => m.Temperature).Average(),
+            RSSI = (short)measurements.Select(m => (int)m.RSSI).Average(),
+            Timestamp = timestamp,
+            SequenceNumber = measurements.Last().SequenceNumber,
+            MovementCounter = measurements.Last().MovementCounter
+        };
 
-            _logger.LogInformation("{Identity}: Saving measurements: {measurements}", GetIdentity(), measurements);
+        return averageMeasurements;
+    }
 
-            var result = true; 
-            foreach (var bridgeName in _ruuviTagState.State.Bridges)
-            {
-                var success = await GrainFactory.GetGrain<IInfluxBridge>(bridgeName)
-                    .WriteMeasurements(_ruuviTagState.State.MacAddress, _ruuviTagState.State.StoreName ? _ruuviTagState.State.Name : null, measurements);
-                if (result)
-                {
-                    // If any push to bridge fails, return false
-                    result = success;
-                }
-            }
+    private bool TryParseMeasurements(byte[] data, bool discardInvalidValues, out MeasurementDTO measurements)
+    {
+        try
+        {
+            return DataParserFactory.GetParser(data).TryParseMeasurements(data, discardInvalidValues, out measurements);
+        }
+        catch (Exception e)
+        {
+            _logger.LogError("Failed to parse measurements: {errorMessage}", e.Message);
+            measurements = null;
+            return false;
+        }
+    }
 
-            if (_ruuviTagState.State.UseAzure)
-            {
-                await SendTelemetry(measurements);
-            }
+    private string GetIdentity()
+    {
+        return _ruuviTagState.State.Name ?? _ruuviTagState.State.MacAddress;
+    }
 
-            return result;
+    public async Task ReceiveMeasurements(MeasurementEnvelope measurementEnvelope)
+    {
+        if (!_ruuviTagState.State.Initialized)
+        {
+            _logger.LogWarning(
+                "An uninitialized RuuviTag {macAddress} receiving data with signal strength {signalStrength}. (Ignoring packet)",
+                this.GetPrimaryKeyString(),
+                measurementEnvelope.SignalStrength);
+            return;
         }
 
-        private Measurements CalculateAverageMeasurements()
+        if (measurementEnvelope.SignalStrength.HasValue)
         {
-            Acceleration accelerationAverage = null;
-
-            var averageMeasurements = new Measurements
-            {
-                // No point calculating battery level average, just use the latest
-                BatteryVoltage = _ruuviTagState.State.LatestMeasurements.Last().BatteryVoltage,
-                Humidity = _ruuviTagState.State.LatestMeasurements.Select(m => m.Humidity).Average(),
-                Pressure = _ruuviTagState.State.LatestMeasurements.Select(m => m.Pressure).Average(),
-                Temperature = _ruuviTagState.State.LatestMeasurements.Select(m => m.Temperature).Average(),
-                Timestamp = _ruuviTagState.State.LatestMeasurements.Last().Timestamp
-            };
-
-            if (_ruuviTagState.State.StoreAcceleration)
-            {
-                accelerationAverage = new Acceleration
-                {
-                    XAxis = _ruuviTagState.State.LatestMeasurements.Select(m => m.Acceleration.XAxis).Average(),
-                    YAxis = _ruuviTagState.State.LatestMeasurements.Select(m => m.Acceleration.YAxis).Average(),
-                    ZAxis = _ruuviTagState.State.LatestMeasurements.Select(m => m.Acceleration.ZAxis).Average()
-                };
-            }
-
-            averageMeasurements.Acceleration = accelerationAverage;
-
-            return averageMeasurements;
+            _ruuviTagState.State.SignalStrength = measurementEnvelope.SignalStrength.Value;
         }
 
-        public Task<List<Measurements>> GetCachedMeasurements()
-        {
-            return Task.FromResult(_ruuviTagState.State.LatestMeasurements);
-        }
+        await StoreMeasurementDataAsync(
+            measurementEnvelope.Timestamp,
+            _ruuviTagState.State.SignalStrength,
+            measurementEnvelope.Data);
+        await GrainFactory.GetGrain<IRuuviTagRegistry>(0).Refresh(
+            _ruuviTagState.State.MacAddress,
+            measurementEnvelope.Timestamp);
+    }
 
-        public async Task UseAzure(AzureState state, string scopeId, string primaryKey)
-        {
-            switch (state)
-            {
-                case AzureState.On:
-                    _ruuviTagState.State.UseAzure = true;
-                    // Use existing values if not given
-                    _ruuviTagState.State.AzureScopeId = scopeId ?? _ruuviTagState.State.AzureScopeId;
-                    _ruuviTagState.State.AzurePrimaryKey = primaryKey ?? _ruuviTagState.State.AzurePrimaryKey;
-                    break;
-                case AzureState.Off:
-                    _ruuviTagState.State.UseAzure = false;
-                    // Clear the primary key and scope ID values
-                    _ruuviTagState.State.AzurePrimaryKey = null;
-                    _ruuviTagState.State.AzureScopeId = null;
-                    break;
-                case AzureState.Paused:
-                    _ruuviTagState.State.UseAzure = false;
-                    // Keep the primary key and scope ID values
-                    break;
-                default:
-                    throw new InvalidEnumArgumentException(nameof(state), (int) state, typeof(AzureState) );
-            }
-
-            await _ruuviTagState.WriteStateAsync();
-        }
-
-        public Task<bool> MeasurementsAllowedThroughGateway()
-        {
-            return Task.FromResult(_ruuviTagState.State.AllowMeasurementsThroughGateway);
-        }
-
-        public async Task AllowMeasurementsThroughGateway(bool allowed)
-        {
-            var existingValue = _ruuviTagState.State.AllowMeasurementsThroughGateway;
-            _ruuviTagState.State.AllowMeasurementsThroughGateway = allowed;
-
-            // Raspberry Pi optimization, no unnecessary writes to SD card.
-            if (allowed != existingValue)
-            {
-                await _ruuviTagState.WriteStateAsync();
-            }
-        }
-
-        private void AddMeasurements(Measurements measurements)
-        {
-            _ruuviTagState.State.LatestMeasurements ??= new List<Measurements>();
-            _ruuviTagState.State.LatestMeasurements.Add(measurements);
-        }
-
-        private bool TryParseMeasurements(byte[] data, bool discardInvalidValues, out Measurements measurements)
-        {
-            try
-            {
-                return DataParserFactory.GetParser(data).TryParseMeasurements(data, discardInvalidValues, out measurements);
-            }
-            catch (Exception e)
-            {
-                _logger.LogError("Failed to parse measurements: {errorMessage}", e.Message);
-                measurements = null;
-                return false;
-            }
-        }
-
-        private string GetIdentity()
-        {
-            return _ruuviTagState.State.Name ?? _ruuviTagState.State.MacAddress;
-        }
-
-        #region Azure IoT
-
-        private async Task<DeviceClient> ConnectToAzureIoT()
-        {
-            _logger.LogInformation("Connecting {identity} to Azure IoT.", GetIdentity());
-            using var security =
-                new SecurityProviderSymmetricKey(this.GetPrimaryKeyString(), _ruuviTagState.State.AzurePrimaryKey, null);
-            var result = await RegisterDevice(security);
-            if (result.Status != ProvisioningRegistrationStatusType.Assigned)
-            {
-                _logger.LogError("Failed to register device {identity} to Azure IoT.", GetIdentity());
-                return null;
-            }
-
-            IAuthenticationMethod auth =
-                new DeviceAuthenticationWithRegistrySymmetricKey(result.DeviceId, security.GetPrimaryKey());
-            return DeviceClient.Create(result.AssignedHub, auth, TransportType.Mqtt);
-        }
-
-        private async Task<DeviceRegistrationResult> RegisterDevice(SecurityProviderSymmetricKey security)
-        {
-            Log.Information("Registering device {identity}.", GetIdentity());
-
-            using var transport = new ProvisioningTransportHandlerMqtt(TransportFallbackType.TcpOnly);
-            var provClient = ProvisioningDeviceClient.Create(GlobalDeviceEndpoint, _ruuviTagState.State.AzureScopeId, security, transport);
-
-            var result = await provClient.RegisterAsync();
-
-            _logger.LogInformation("Registration result: {result}.", result.Status);
-            return result;
-        }
-
-        private async Task SendTelemetry(Measurements measurements)
-        {
-            if (_azureClient == null)
-            {
-                _azureClient = await ConnectToAzureIoT();
-                if (_azureClient == null)
-                {
-                    Log.Error("Could not initialize the connection to Azure IoT. Disabling the connection.");
-                    _ruuviTagState.State.UseAzure = false;
-                    return;
-                }
-            }
-            _logger.LogInformation("{Identity}: Sending measurements to Azure IoT.", GetIdentity());
-
-            var telemetryDataPoint = new
-            {
-                humidity = measurements.Humidity,
-                pressure = measurements.Pressure,
-                temp = measurements.Temperature
-            };
-            var messageString = JsonSerializer.Serialize(telemetryDataPoint);
-            var message = new Message(Encoding.ASCII.GetBytes(messageString));
-
-            await _azureClient.SendEventAsync(message);
-        }
-
-        #endregion // Azure IoT
-
-        public async Task OnNextAsync(MeasurementEnvelope measurementEnvelope, StreamSequenceToken token = null)
-        {
-            if (!_ruuviTagState.State.Initialized)
-            {
-                _logger.LogWarning("An uninitialized RuuviTag {macAddress} receiving data with signal strength {signalStrength}. (Ignoring packet)", 
-                    measurementEnvelope.MacAddress,
-                    measurementEnvelope.SignalStrength);
-                return;
-            }
-
-            _ruuviTagState.State.SignalStrength = measurementEnvelope.SignalStrength.GetValueOrDefault(_ruuviTagState.State.SignalStrength);
-            
-            await StoreMeasurementDataAsync(measurementEnvelope.Timestamp, _ruuviTagState.State.SignalStrength, measurementEnvelope.Data);
-            await GrainFactory.GetGrain<IRuuviTagRegistry>(0).Refresh(_ruuviTagState.State.MacAddress, measurementEnvelope.Timestamp);
-        }
-
-        public Task OnCompletedAsync()
-        {
-            return Task.CompletedTask;
-        }
-
-        public Task OnErrorAsync(Exception ex)
-        {
-            _logger.LogError(ex, "{ruuviTag} | Stream error.", _ruuviTagState.State.Name ?? _ruuviTagState.State.MacAddress);
-            return Task.CompletedTask;
-        }
-
-        /// <inheritdoc />
-        public Task<RuuviTag> GetTag()
-        {
-            return Task.FromResult(new RuuviTag
+    /// <inheritdoc />
+    public Task<RuuviTag> GetTag()
+    {
+        return Task.FromResult(
+            new RuuviTag
             {
                 Name = _ruuviTagState.State.Name,
                 StoreAcceleration = _ruuviTagState.State.StoreAcceleration,
@@ -399,117 +365,97 @@ namespace net.jommy.RuuviCore.Grains
                 AllowMeasurementsThroughGateway = _ruuviTagState.State.AllowMeasurementsThroughGateway,
                 DiscardMinMaxValues = _ruuviTagState.State.DiscardMinMaxValues
             });
+    }
+
+    public async Task Edit(RuuviTag ruuviTag)
+    {
+        var dirty = false;
+        var updateRegistry = ruuviTag.Name != _ruuviTagState.State.Name;
+
+        if (!_ruuviTagState.State.Initialized)
+        {
+            if (ruuviTag.MacAddress != this.GetPrimaryKeyString())
+            {
+                throw new ArgumentException(
+                    "MAC address used to fetch RuuviTag does not match the MAC address passed as parameter.");
+            }
+
+            dirty = true;
+            updateRegistry = true;
+            _ruuviTagState.State.MacAddress = ruuviTag.MacAddress;
+            _ruuviTagState.State.Initialized = true;
         }
 
-        public async Task SetBridges(List<string> bridges)
+        if (ruuviTag.Name != _ruuviTagState.State.Name)
         {
-            if (bridges == null || !bridges.Any())
-            {
-                throw new ArgumentException("Bridges list was empty");
-            }
-            
-            await CheckBridgesAsync(bridges);
-            _ruuviTagState.State.Bridges = bridges;
+            dirty = true;
+            _ruuviTagState.State.Name = ruuviTag.Name;
+        }
+
+        if (ruuviTag.StoreAcceleration != _ruuviTagState.State.StoreAcceleration)
+        {
+            dirty = true;
+            _ruuviTagState.State.StoreAcceleration = ruuviTag.StoreAcceleration;
+        }
+
+        if (ruuviTag.StoreName != _ruuviTagState.State.StoreName)
+        {
+            dirty = true;
+            _ruuviTagState.State.StoreName = ruuviTag.StoreName;
+        }
+
+        if (ruuviTag.DataSavingInterval != _ruuviTagState.State.DataSavingInterval)
+        {
+            dirty = true;
+            _ruuviTagState.State.DataSavingInterval = ruuviTag.DataSavingInterval;
+        }
+
+        if (ruuviTag.AllowMeasurementsThroughGateway != _ruuviTagState.State.AllowMeasurementsThroughGateway)
+        {
+            dirty = true;
+            _ruuviTagState.State.AllowMeasurementsThroughGateway = ruuviTag.AllowMeasurementsThroughGateway;
+        }
+
+        if (ruuviTag.DiscardMinMaxValues != _ruuviTagState.State.DiscardMinMaxValues)
+        {
+            dirty = true;
+            _ruuviTagState.State.DiscardMinMaxValues = ruuviTag.DiscardMinMaxValues;
+        }
+
+        if (ruuviTag.IncludeInDashboard != _ruuviTagState.State.InDashboard)
+        {
+            dirty = true;
+            _ruuviTagState.State.InDashboard = ruuviTag.IncludeInDashboard;
+        }
+
+        if (ruuviTag.AlertRules != null && (ruuviTag.AlertRules == null ||
+                                            ruuviTag.AlertRules.Count != _ruuviTagState.State.AlertRules.Count ||
+                                            !ruuviTag.AlertRules.Any(AlertRuleDiffers)))
+        {
+            dirty = true;
+            _ruuviTagState.State.AlertRules = ruuviTag.AlertRules;
+        }
+
+        if (dirty)
+        {
             await _ruuviTagState.WriteStateAsync();
+            if (updateRegistry)
+            {
+                await GrainFactory.GetGrain<IRuuviTagRegistry>(0).AddOrUpdate(
+                    _ruuviTagState.State.MacAddress,
+                    _ruuviTagState.State.Name);
+            }
         }
+    }
 
-        private async Task CheckBridgesAsync(List<string> bridges)
+    private bool AlertRuleDiffers(KeyValuePair<string, AlertThresholds> newRules)
+    {
+        if (_ruuviTagState.State.AlertRules.TryGetValue(newRules.Key, out var value))
         {
-            foreach (var bridge in bridges)
-            {
-                if (!await GrainFactory.GetGrain<IInfluxBridge>(bridge).IsValid())
-                {
-                    throw new ArgumentException($"Invalid bridge encountered: '{bridge}'");
-                }
-            }
+            return value.MinValidValue != newRules.Value.MinValidValue
+                   || value.MaxValidValue != newRules.Value.MaxValidValue;
         }
 
-        public async Task Edit(RuuviTag ruuviTag)
-        {
-            var dirty = false;
-            var updateRegistry = ruuviTag.Name != _ruuviTagState.State.Name;
-
-            if (!_ruuviTagState.State.Initialized)
-            {
-                if (ruuviTag.MacAddress.ToActorGuid() != this.GetPrimaryKey())
-                {
-                    throw new ArgumentException("MAC address used to fetch RuuviTag does not match the MAC address passed as parameter.");
-                }
-                
-                dirty = true;
-                updateRegistry = true;
-                _ruuviTagState.State.MacAddress = ruuviTag.MacAddress;
-                _ruuviTagState.State.Initialized = true;
-            }
-            
-            if (ruuviTag.Name != _ruuviTagState.State.Name)
-            {
-                dirty = true;
-                _ruuviTagState.State.Name = ruuviTag.Name;
-            }
-
-            if (ruuviTag.StoreAcceleration != _ruuviTagState.State.StoreAcceleration)
-            {
-                dirty = true;
-                _ruuviTagState.State.StoreAcceleration = ruuviTag.StoreAcceleration;
-            }
-
-            if (ruuviTag.StoreName != _ruuviTagState.State.StoreName)
-            {
-                dirty = true;
-                _ruuviTagState.State.StoreName = ruuviTag.StoreName;
-            }
-            
-            if (ruuviTag.DataSavingInterval != _ruuviTagState.State.DataSavingInterval)
-            {
-                dirty = true;
-                _ruuviTagState.State.DataSavingInterval = ruuviTag.DataSavingInterval;
-            }
-            
-            if (ruuviTag.AllowMeasurementsThroughGateway != _ruuviTagState.State.AllowMeasurementsThroughGateway)
-            {
-                dirty = true;
-                _ruuviTagState.State.AllowMeasurementsThroughGateway = ruuviTag.AllowMeasurementsThroughGateway;
-            }
-            
-            if (ruuviTag.DiscardMinMaxValues != _ruuviTagState.State.DiscardMinMaxValues)
-            {
-                dirty = true;
-                _ruuviTagState.State.DiscardMinMaxValues = ruuviTag.DiscardMinMaxValues;
-            }
-
-            if (ruuviTag.IncludeInDashboard != _ruuviTagState.State.InDashboard)
-            {
-                dirty = true;
-                _ruuviTagState.State.InDashboard = ruuviTag.IncludeInDashboard;
-            }
-
-            if (ruuviTag.AlertRules != null && (ruuviTag.AlertRules == null || 
-                ruuviTag.AlertRules.Count != _ruuviTagState.State.AlertRules.Count ||
-                 !ruuviTag.AlertRules.Any(AlertRuleDiffers)))
-            {
-                dirty = true;
-                _ruuviTagState.State.AlertRules = ruuviTag.AlertRules;
-            }
-            
-            if (dirty)
-            {
-                await _ruuviTagState.WriteStateAsync();
-                if (updateRegistry)
-                {
-                    await GrainFactory.GetGrain<IRuuviTagRegistry>(0).AddOrUpdate(_ruuviTagState.State.MacAddress, _ruuviTagState.State.Name);
-                }
-            }
-        }
-
-        private bool AlertRuleDiffers(KeyValuePair<string, AlertThresholds> newRules)
-        {
-            if (_ruuviTagState.State.AlertRules.TryGetValue(newRules.Key, out var value))
-            {
-                return value.MinValidValue != newRules.Value.MinValidValue || value.MaxValidValue != newRules.Value.MaxValidValue;
-            }
-
-            return true;
-        }
+        return true;
     }
 }

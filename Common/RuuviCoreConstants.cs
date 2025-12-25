@@ -1,8 +1,7 @@
-namespace net.jommy.RuuviCore.Common
+namespace net.jommy.RuuviCore.Common;
+
+public static class RuuviCoreConstants
 {
-    public static class RuuviCoreConstants
-    {
-        public const string GrainStorageName = "RuuviStorage";
-        public const string StreamProviderName = "RuuviStreamProvider";
-    }
+    public const string GrainStorageName = "RuuviStorage";
+    public const string StreamProviderName = "RuuviStreamProvider";
 }

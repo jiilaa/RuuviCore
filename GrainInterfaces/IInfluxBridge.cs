@@ -3,9 +3,7 @@ using Orleans;
 
 namespace net.jommy.RuuviCore.Interfaces;
 
-public interface IInfluxBridge : IGrainWithStringKey
+public interface IInfluxBridge : IGrainWithIntegerKey
 {
-    Task<bool> WriteMeasurements(string macAddress, string name, Measurements measurements);
-
-    Task<bool> IsValid();
+    Task<bool> WriteMeasurements(string macAddress, string name, MeasurementDTO measurements);
 }

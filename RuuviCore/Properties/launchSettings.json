@@ -18,7 +18,7 @@
     "RuuviCore": {
       "commandName": "Project",
       "commandLineArgs": "--http",
-      "launchBrowser": true,
+      "launchBrowser": false,
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development"
       },

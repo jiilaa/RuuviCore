@@ -1,36 +1,32 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Threading.Tasks;
 using Orleans;
 
-namespace net.jommy.RuuviCore.Interfaces
+namespace net.jommy.RuuviCore.Interfaces;
+
+public interface IRuuviTag : IGrainWithStringKey
 {
-    public interface IRuuviTag : IGrainWithGuidKey
-    {
-        Task Initialize(string macAddress, string name, DataSavingOptions dataSavingOptions, List<string> bridges);
+    Task Initialize(string macAddress, string name, DataSavingOptions dataSavingOptions);
         
-        Task SetName(string name);
+    Task SetName(string name);
 
-        Task<string> GetName();
+    Task<string> GetName();
 
-        Task SetDataSavingOptions(DataSavingOptions options);
+    Task SetDataSavingOptions(DataSavingOptions options);
 
-        Task<DataSavingOptions> GetDataSavingOptions();
+    Task<DataSavingOptions> GetDataSavingOptions();
 
-        Task StoreMeasurementData(Measurements measurements);
+    Task StoreMeasurementData(MeasurementDTO measurements);
 
-        Task<List<Measurements>> GetCachedMeasurements();
+    Task ReceiveMeasurements(MeasurementEnvelope measurementEnvelope);
 
-        Task UseAzure(AzureState state, string scopeId, string primaryKey);
+    Task<List<MeasurementDTO>> GetCachedMeasurements();
 
-        Task<bool> MeasurementsAllowedThroughGateway();
+    Task<bool> MeasurementsAllowedThroughGateway();
 
-        Task AllowMeasurementsThroughGateway(bool allowed);
+    Task AllowMeasurementsThroughGateway(bool allowed);
         
-        Task<RuuviTag> GetTag();
+    Task<RuuviTag> GetTag();
 
-        Task Edit(RuuviTag ruuviTag);
-        
-        Task SetBridges(List<string> bridges);
-    }
+    Task Edit(RuuviTag ruuviTag);
 }

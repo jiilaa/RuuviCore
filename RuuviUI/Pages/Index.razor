@@ -1,0 +1,77 @@
+@page "/"
+@using net.jommy.RuuviCore.Interfaces
+@inject NavigationManager NavigationManager
+
+<div class="container mt-4">
+    <div class="jumbotron">
+        <h1 class="display-4">Welcome to RuuviCore</h1>
+        <p class="lead">Monitor and manage your Ruuvi environmental sensors</p>
+        <hr class="my-4">
+        <p>RuuviCore is a comprehensive system for collecting, storing, and analyzing data from Ruuvi Bluetooth environmental sensors.</p>
+
+        <div class="row mt-4">
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title">
+                            <i class="oi oi-bluetooth text-primary"></i> Manage Tags
+                        </h5>
+                        <p class="card-text">View and configure your Ruuvi tags, set up monitoring intervals, and manage settings.</p>
+                        <a href="/taglist" class="btn btn-primary">
+                            <i class="oi oi-list"></i> View Tags
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title">
+                            <i class="oi oi-plus text-success"></i> Add New Tag
+                        </h5>
+                        <p class="card-text">Register a new Ruuvi tag to start monitoring temperature, humidity, and pressure.</p>
+                        <a href="/add-tag" class="btn btn-success">
+                            <i class="oi oi-plus"></i> Add Tag
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title">
+                            <i class="oi oi-dashboard text-info"></i> Dashboard
+                        </h5>
+                        <p class="card-text">Real-time monitoring dashboard showing current readings from all active tags.</p>
+                        <button class="btn btn-secondary" disabled>
+                            <i class="oi oi-clock"></i> Coming Soon
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row mt-4">
+            <div class="col">
+                <div class="alert alert-info" role="alert">
+                    <h5 class="alert-heading"><i class="oi oi-info"></i> Quick Start</h5>
+                    <ol class="mb-0">
+                        <li>Make sure your Ruuvi tags are powered on and broadcasting</li>
+                        <li>Click "Add Tag" to register a new Ruuvi tag using its MAC address</li>
+                        <li>Configure monitoring settings like data saving interval</li>
+                        <li>View real-time and historical data from your tags</li>
+                    </ol>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    protected override void OnInitialized()
+    {
+        // You could check for tags here and redirect if needed
+    }
+}

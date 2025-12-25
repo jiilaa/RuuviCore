@@ -2,15 +2,15 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net6.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <RootNamespace>net.jommy.RuuviCore</RootNamespace>
     <AssemblyName>ruuvi-core</AssemblyName>
-    <Version>0.6.0</Version>
+    <Version>2.0.0</Version>
     <Authors>Jomi Laakkonen</Authors>
     <Company />
-    <PackageVersion>0.7.0</PackageVersion>
-    <AssemblyVersion>0.7.1</AssemblyVersion>
-    <FileVersion>0.7.1</FileVersion>
+    <PackageVersion>2.0.0</PackageVersion>
+    <AssemblyVersion>2.0.0</AssemblyVersion>
+    <FileVersion>2.0.0</FileVersion>
     <UserSecretsId>d40304c8-3507-41b4-883a-dca7cf14316c</UserSecretsId>
     <DockerDefaultTargetOS>Linux</DockerDefaultTargetOS>
     <StartupObject>net.jommy.RuuviCore.Program</StartupObject>
@@ -22,16 +22,15 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Append.Blazor.Notifications" Version="1.1.0" />
-    <PackageReference Include="BlazorStrap" Version="5.0.106" />
-    <PackageReference Include="Microsoft.Bcl.AsyncInterfaces" Version="6.0.0" />
-    <PackageReference Include="Microsoft.Extensions.Hosting" Version="6.0.1" />
-    <PackageReference Include="Microsoft.Orleans.Server" Version="3.6.5" />
-    <PackageReference Include="Serilog" Version="2.12.0" />
-    <PackageReference Include="Serilog.Extensions.Hosting" Version="5.0.1" />
-    <PackageReference Include="Serilog.Extensions.Logging" Version="3.1.0" />
-    <PackageReference Include="Serilog.Sinks.Console" Version="4.1.0" />
-    <PackageReference Include="Serilog.Sinks.File" Version="5.0.0" />
+    <PackageReference Include="BlazorStrap" Version="5.2.104" />
+    <PackageReference Include="Microsoft.Bcl.AsyncInterfaces" Version="10.0.1" />
+    <PackageReference Include="Microsoft.Orleans.Serialization.SystemTextJson" Version="9.2.1" />
+    <PackageReference Include="Microsoft.Orleans.Server" Version="9.2.1" />
+    <PackageReference Include="Serilog" Version="4.3.0" />
+    <PackageReference Include="Serilog.Extensions.Hosting" Version="9.0.0" />
+    <PackageReference Include="Serilog.Extensions.Logging" Version="9.0.2" />
+    <PackageReference Include="Serilog.Sinks.Console" Version="6.0.0" />
+    <PackageReference Include="Serilog.Sinks.File" Version="7.0.0" />
   </ItemGroup>
 
   <ItemGroup>
@@ -40,15 +39,16 @@
     <ProjectReference Include="..\GrainInterfaces\GrainInterfaces.csproj" />
     <ProjectReference Include="..\GrainServices\GrainServices.csproj" />
     <ProjectReference Include="..\Grains\Grains.csproj" />
+    <ProjectReference Include="..\RuuviUI\RuuviUI.csproj" />
   </ItemGroup>
   
   <ItemGroup>
-    <None Update="appsettings.core.json">
+    <None Update="appsettings.json">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+    <None Update="appsettings.Development.json">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
   </ItemGroup>
-  
-  <ItemGroup>
-    <Folder Include="Services" />
-  </ItemGroup>
+
 </Project>

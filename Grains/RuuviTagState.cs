@@ -1,10 +1,12 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
+
 using net.jommy.RuuviCore.Common;
 using net.jommy.RuuviCore.Interfaces;
 
 namespace net.jommy.RuuviCore.Grains;
 
-public class RuuviTagState : IAzureAccessor
+public class RuuviTagState
 {
     public string MacAddress { get; set; }
     public string Name { get; set; }
@@ -14,22 +16,19 @@ public class RuuviTagState : IAzureAccessor
     public bool StoreAcceleration { get; set; }
     public bool StoreName { get; set; }
     public bool DiscardMinMaxValues { get; set; }
-    public List<Measurements> LatestMeasurements { get; set; }
-    public bool UseAzure { get; set; }
+
+    public DateTime? CurrentBucketStartTime { get; set; }
+
+    public List<MeasurementDTO> CurrentBucketMeasurements { get; set; } = [];
+
+    public List<CachedMeasurement> CachedMeasurements { get; set; } = [];
+
     public bool AllowMeasurementsThroughGateway { get; set; }
-    public string AzurePrimaryKey { get; set; }
-    public string AzureScopeId { get; set; }
     public bool InDashboard { get; set; }
 
     public short SignalStrength { get; set; }
 
-    public List<string> Bridges { get; set; }
+    public TimeSpan BucketSize { get; set; }
 
-    public IDictionary<string, AlertThresholds> AlertRules { get; set; }
-
-    public RuuviTagState()
-    {
-        AlertRules = new Dictionary<string, AlertThresholds>();
-        Bridges = new List<string> { "default" };
-    }
+    public IDictionary<string, AlertThresholds> AlertRules { get; set; } = new Dictionary<string, AlertThresholds>();
 }

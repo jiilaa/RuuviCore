@@ -1,0 +1,11 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <RootNamespace>net.jommy.RuuviCore.Bluez</RootNamespace>
+    </PropertyGroup>
+    <ItemGroup>
+        <PackageReference Include="Tmds.DBus" Version="0.22.0"/>
+        <PackageReference Include="Tmds.DBus.Protocol" Version="0.22.0"/>
+    </ItemGroup>
+</Project>
