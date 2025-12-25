@@ -265,3 +265,6 @@ init-*.ps1
 
 # BuildKit config for local registry
 buildkitd.toml
+
+# Local publish scripts
+publish.cmd
