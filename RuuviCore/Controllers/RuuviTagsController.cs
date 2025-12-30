@@ -89,7 +89,8 @@ namespace net.jommy.RuuviCore.Controllers
                     CalculateAverages = request.CalculateAverages ?? false,
                     StoreAcceleration = request.StoreAcceleration ?? false,
                     DiscardMinMaxValues = request.DiscardMinMaxValues ?? true
-                });
+                },
+                ["default"]);
 
                 if (request.AllowHttp ?? false)
                 {

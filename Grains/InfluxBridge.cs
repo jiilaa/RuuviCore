@@ -7,7 +7,6 @@ using InfluxDB.Collector;
 using InfluxDB.Collector.Diagnostics;
 
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 
 using net.jommy.RuuviCore.Common;
 using net.jommy.RuuviCore.Interfaces;
@@ -21,17 +20,19 @@ namespace net.jommy.RuuviCore.Grains;
 public class InfluxBridge : Grain, IInfluxBridge
 {
     private MetricsCollector _metricsCollector;
-    private readonly InfluxSettings _influxSettings;
+    private InfluxSettings _influxSettings;
+    private readonly IInfluxSettingsFactory _influxSettingsFactory;
     private readonly ILogger<InfluxBridge> _logger;
 
-    public InfluxBridge(IOptions<InfluxSettings> influxOptions, ILogger<InfluxBridge> logger)
+    public InfluxBridge(IInfluxSettingsFactory influxSettingsFactory, ILogger<InfluxBridge> logger)
     {
-        _influxSettings = influxOptions.Value;
+        _influxSettingsFactory = influxSettingsFactory;
         _logger = logger;
     }
 
     public override Task OnActivateAsync(CancellationToken cancellationToken)
     {
+        _influxSettings = _influxSettingsFactory.GetSettings(this.GetPrimaryKeyString());
         _logger.LogDebug(
             "Activating InfluxDB bridge to {InfluxAddress}, database: {InfluxDatabase}, measurement table: {InfluxMeasurementTable}, UserName: {UserName}, Password: {Password}.",
             _influxSettings.InfluxAddress,
@@ -98,5 +99,10 @@ public class InfluxBridge : Grain, IInfluxBridge
         }
 
         return Task.FromResult(true);
+    }
+
+    public Task<bool> IsValid()
+    {
+        return Task.FromResult(_influxSettings.BridgeName == this.GetPrimaryKeyString());
     }
 }

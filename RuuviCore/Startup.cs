@@ -34,7 +34,6 @@ public class Startup
 
         services.Configure<RestApiOptions>(Configuration.GetSection("APISettings"));
         services.Configure<DBusSettings>(Configuration.GetSection("DBusSettings"));
-        services.Configure<InfluxSettings>(Configuration.GetSection("InfluxSettings"));
 
         services
             .AddControllers()

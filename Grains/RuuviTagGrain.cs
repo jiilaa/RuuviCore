@@ -44,7 +44,7 @@ public class RuuviTagGrain : Grain, IRuuviTag
         await _ruuviTagState.WriteStateAsync(cancellationToken);
     }
 
-    public async Task Initialize(string macAddress, string name, DataSavingOptions dataSavingOptions)
+    public async Task Initialize(string macAddress, string name, DataSavingOptions dataSavingOptions, List<string> bridges)
     {
         if (macAddress != this.GetPrimaryKeyString())
         {
@@ -72,6 +72,12 @@ public class RuuviTagGrain : Grain, IRuuviTag
         _ruuviTagState.State.DiscardMinMaxValues = dataSavingOptions.DiscardMinMaxValues;
         _ruuviTagState.State.BucketSize = dataSavingOptions.BucketSize;
         _ruuviTagState.State.Initialized = true;
+
+        if (bridges != null && bridges.Count != 0)
+        {
+            await AddValidBridgesAsync(bridges);
+        }
+
         await _ruuviTagState.WriteStateAsync();
         await GrainFactory.GetGrain<IRuuviTagRegistry>(0).AddOrUpdate(macAddress, name);
     }
@@ -81,6 +87,32 @@ public class RuuviTagGrain : Grain, IRuuviTag
         _ruuviTagState.State.Name = name;
         await _ruuviTagState.WriteStateAsync();
         await GrainFactory.GetGrain<IRuuviTagRegistry>(0).AddOrUpdate(_ruuviTagState.State.MacAddress, name);
+    }
+
+    public async Task SetBridges(List<string> bridges)
+    {
+        if (bridges == null || !bridges.Any())
+        {
+            throw new ArgumentException("Bridges list was empty");
+        }
+
+        await AddValidBridgesAsync(bridges);
+        await _ruuviTagState.WriteStateAsync();
+    }
+
+    private async Task AddValidBridgesAsync(List<string> bridges)
+    {
+        foreach (var bridge in bridges)
+        {
+            if (!await GrainFactory.GetGrain<IInfluxBridge>(bridge).IsValid())
+            {
+                _logger.LogError("{Identity}: Bridge {bridge} is not valid. Skipping.", GetIdentity(), bridge);
+            }
+            else
+            {
+                _ruuviTagState.State.Bridges.Add(bridge);
+            }
+        }
     }
 
     public Task<string> GetName()
@@ -194,11 +226,20 @@ public class RuuviTagGrain : Grain, IRuuviTag
     {
         _logger.LogInformation("{Identity}: Saving measurements: {measurements}", GetIdentity(), measurements);
 
-        var result = await GrainFactory.GetGrain<IInfluxBridge>(0)
-            .WriteMeasurements(
-                _ruuviTagState.State.MacAddress,
-                _ruuviTagState.State.StoreName ? _ruuviTagState.State.Name : null,
-                measurements);
+        var result = true;
+        foreach (var bridgeName in _ruuviTagState.State.Bridges)
+        {
+            var success = await GrainFactory.GetGrain<IInfluxBridge>(bridgeName)
+                .WriteMeasurements(
+                    _ruuviTagState.State.MacAddress,
+                    _ruuviTagState.State.StoreName ? _ruuviTagState.State.Name : null,
+                    measurements);
+            if (result)
+            {
+                // If any push to bridge fails, return false
+                result = success;
+            }
+        }
 
         return result;
     }

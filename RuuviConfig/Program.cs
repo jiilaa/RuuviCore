@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Reflection;
 using System.Threading.Tasks;
 using CommandLine;
@@ -198,7 +199,8 @@ class Program
             StoreAcceleration = options.Acceleration,
             DiscardMinMaxValues = options.CheckValidity,
             BucketSize = TimeSpan.FromMinutes(options.BucketSizeMinutes)
-        });
+        },
+        ["default"]);
 
         if (options.AllowHttp)
         {

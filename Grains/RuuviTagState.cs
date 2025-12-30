@@ -28,6 +28,8 @@ public class RuuviTagState
 
     public short SignalStrength { get; set; }
 
+    public HashSet<string> Bridges { get; set; } = ["default"];
+
     public TimeSpan BucketSize { get; set; }
 
     public IDictionary<string, AlertThresholds> AlertRules { get; set; } = new Dictionary<string, AlertThresholds>();

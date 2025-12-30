@@ -85,7 +85,12 @@ public class Program
             })
             .UseOrleans(ConfigureOrleans)
             .ConfigureLogging(ConfigureLogging())
-            .ConfigureServices(collection => collection.AddBlazorStrap())
+            .ConfigureServices(collection =>
+            {
+                collection.AddBlazorStrap();
+                collection.AddSingleton<IInfluxSettingsFactory, InfluxSettingsFactory>();
+                collection.Configure<InfluxBridgeList>(configuration.GetSection("InfluxSettings"));
+            })
             .UseConsoleLifetime(options => options.SuppressStatusMessages = true)
             .ConfigureHostOptions(options => options.ShutdownTimeout = TimeSpan.FromSeconds(30));
 

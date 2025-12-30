@@ -6,9 +6,11 @@ namespace net.jommy.RuuviCore.Interfaces;
 
 public interface IRuuviTag : IGrainWithStringKey
 {
-    Task Initialize(string macAddress, string name, DataSavingOptions dataSavingOptions);
-        
+    Task Initialize(string macAddress, string name, DataSavingOptions dataSavingOptions, List<string> bridges);
+
     Task SetName(string name);
+
+    Task SetBridges(List<string> bridges);
 
     Task<string> GetName();
 
