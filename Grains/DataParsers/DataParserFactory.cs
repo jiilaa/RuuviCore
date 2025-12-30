@@ -15,7 +15,8 @@ public static class DataParserFactory
         DataParsers = new Dictionary<byte, IRuuviDataParser>
         {
             [3] = new RAWv1Parser(),
-            [5] = new RAWv2Parser()
+            [5] = new RAWv2Parser(),
+            [6] = new RuuviProtocol6Parser()
         };
     }
 

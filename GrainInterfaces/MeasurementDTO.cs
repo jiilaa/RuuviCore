@@ -37,6 +37,12 @@ public class MeasurementDTO
     [Orleans.Id(9)]
     public int SequenceNumber { get; set; }
 
+    [Orleans.Id(10)]
+    public AirQuality AirQuality { get; set; }
+
+    [Orleans.Id(11)]
+    public decimal? Luminosity { get; set; }
+
     public override string ToString()
     {
         if (Acceleration != null)

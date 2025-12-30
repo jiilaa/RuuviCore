@@ -79,16 +79,45 @@ public class InfluxBridge : Grain, IInfluxBridge
                 tags["name"] = name;
             }
 
+            var fields = new Dictionary<string, object>
+            {
+                { "Temperature", measurements.Temperature },
+                { "Humidity", measurements.Humidity },
+                { "Pressure", measurements.Pressure },
+                { "Rssi", measurements.RSSI },
+                { "BatteryVoltage", measurements.BatteryVoltage }
+            };
+
+            // Add air quality measurements if available
+            if (measurements.AirQuality != null)
+            {
+                if (measurements.AirQuality.ParticulateMatter25.HasValue)
+                {
+                    fields["PM25"] = measurements.AirQuality.ParticulateMatter25.Value;
+                }
+                if (measurements.AirQuality.CO2Concentration.HasValue)
+                {
+                    fields["CO2"] = measurements.AirQuality.CO2Concentration.Value;
+                }
+                if (measurements.AirQuality.VolatileOrganicCompoundsIndex.HasValue)
+                {
+                    fields["VOC"] = measurements.AirQuality.VolatileOrganicCompoundsIndex.Value;
+                }
+                if (measurements.AirQuality.NitrogenOxidesIndex.HasValue)
+                {
+                    fields["NOX"] = measurements.AirQuality.NitrogenOxidesIndex.Value;
+                }
+            }
+
+            // Add luminosity if available
+            if (measurements.Luminosity.HasValue)
+            {
+                fields["Luminosity"] = measurements.Luminosity.Value;
+            }
+
             _metricsCollector.Write(
                 _influxSettings.InfluxMeasurementTable,
-                new Dictionary<string, object>
-                {
-                    { "Temperature", measurements.Temperature },
-                    { "Humidity", measurements.Humidity },
-                    { "Pressure", measurements.Pressure },
-                    { "Rssi", measurements.RSSI },
-                    { "BatteryVoltage", measurements.BatteryVoltage }
-                },
+                fields,
                 tags,
                 measurements.Timestamp);
         }
