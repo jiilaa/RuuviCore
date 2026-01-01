@@ -1,7 +1,8 @@
 using System;
+
 using net.jommy.RuuviCore.Interfaces;
 
-namespace net.jommy.RuuviCore.Grains.DataParsers;
+namespace net.jommy.RuuviCore.Protocol.DataParsers;
 
 public interface IRuuviDataParser
 {

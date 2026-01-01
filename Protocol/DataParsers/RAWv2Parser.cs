@@ -1,10 +1,11 @@
 using System;
 using System.Buffers.Binary;
+
 using net.jommy.RuuviCore.Interfaces;
 
 // ReSharper disable InconsistentNaming
 
-namespace net.jommy.RuuviCore.Grains.DataParsers;
+namespace net.jommy.RuuviCore.Protocol.DataParsers;
 
 public class RAWv2Parser : RAWParserBase
 {
@@ -18,7 +19,7 @@ public class RAWv2Parser : RAWParserBase
     private const int BatteryVoltageMax = 3646;
     private const int TxPowerMin = -40;
     private const int TxPowerMax = 20;
-        
+
     protected override byte VersionNumber => 5;
     protected override int DataLength => 24;
 

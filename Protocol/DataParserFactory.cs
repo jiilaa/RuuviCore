@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
 
-namespace net.jommy.RuuviCore.Grains.DataParsers;
+using net.jommy.RuuviCore.Protocol.DataParsers;
+
+namespace net.jommy.RuuviCore.Protocol;
 
 /// <summary>
 /// Data formats available: https://github.com/ruuvi/ruuvi-sensor-protocols
@@ -27,11 +29,8 @@ public static class DataParserFactory
             return null;
         }
 
-        if (!DataParsers.TryGetValue(data[0], out var parser))
-        {
-            throw new NotImplementedException($"A parser for protocol version {data[0]} not implemented.");
-        }
-
-        return parser;
+        return DataParsers.TryGetValue(data[0], out var parser)
+            ? parser
+            : throw new NotImplementedException($"A parser for protocol version {data[0]} not implemented.");
     }
 }

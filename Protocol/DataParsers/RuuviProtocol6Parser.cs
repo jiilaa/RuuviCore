@@ -1,10 +1,11 @@
 using System;
 using System.Buffers.Binary;
+
 using net.jommy.RuuviCore.Interfaces;
 
 // ReSharper disable InconsistentNaming
 
-namespace net.jommy.RuuviCore.Grains.DataParsers;
+namespace net.jommy.RuuviCore.Protocol.DataParsers;
 
 public class RuuviProtocol6Parser : RAWParserBase
 {
@@ -24,7 +25,7 @@ public class RuuviProtocol6Parser : RAWParserBase
     private const int NOXMax = 500;
 
     // Luminosity encoding constant: DELTA = ln(65536) / 254
-    private const double LuminosityDelta = 0.04448084;
+    private const double LuminosityDelta = 0.043662814527366631;
 
     protected override byte VersionNumber => 6;
     protected override int DataLength => 20;
@@ -88,17 +89,15 @@ public class RuuviProtocol6Parser : RAWParserBase
             }
         }
 
-        // Parse air quality data (only if not invalid)
-        if (pm25 != PM25Max || co2 != CO2Max || voc != VOCMax || nox != NOXMax)
+        // Parse air quality data - always create AirQuality for format 6
+        // Set individual fields to their values (nulls are handled by nullable types)
+        measurements.AirQuality = new AirQuality
         {
-            measurements.AirQuality = new AirQuality
-            {
-                ParticulateMatter25 = pm25 == PM25Max ? null : pm25,
-                CO2Concentration = co2 == CO2Max ? null : co2,
-                VolatileOrganicCompoundsIndex = voc == VOCMax ? null : voc,
-                NitrogenOxidesIndex = nox == NOXMax ? null : nox
-            };
-        }
+            ParticulateMatter25 = pm25,
+            CO2Concentration = co2,
+            VolatileOrganicCompoundsIndex = voc,
+            NitrogenOxidesIndex = nox
+        };
 
         // Parse luminosity (logarithmic decoding)
         if (luminosityCode is > 0 and < 254)

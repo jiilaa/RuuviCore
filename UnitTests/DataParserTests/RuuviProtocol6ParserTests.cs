@@ -1,8 +1,9 @@
 using System;
 using System.IO;
 using AwesomeAssertions;
-using net.jommy.RuuviCore.Grains.DataParsers;
 using net.jommy.RuuviCore.Interfaces;
+using net.jommy.RuuviCore.Protocol.DataParsers;
+
 using NUnit.Framework;
 
 namespace UnitTests.DataParserTests;

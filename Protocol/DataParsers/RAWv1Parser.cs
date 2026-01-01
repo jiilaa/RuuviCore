@@ -1,10 +1,11 @@
 using System;
 using System.Buffers.Binary;
+
 using net.jommy.RuuviCore.Interfaces;
 
 // ReSharper disable InconsistentNaming
 
-namespace net.jommy.RuuviCore.Grains.DataParsers;
+namespace net.jommy.RuuviCore.Protocol.DataParsers;
 
 public class RAWv1Parser : RAWParserBase
 {

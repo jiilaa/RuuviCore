@@ -7,8 +7,9 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 
 using net.jommy.RuuviCore.Common;
-using net.jommy.RuuviCore.Grains.DataParsers;
+using net.jommy.RuuviCore.Grains.Utils;
 using net.jommy.RuuviCore.Interfaces;
+using net.jommy.RuuviCore.Protocol;
 
 using Orleans;
 using Orleans.Runtime;
@@ -44,7 +45,11 @@ public class RuuviTagGrain : Grain, IRuuviTag
         await _ruuviTagState.WriteStateAsync(cancellationToken);
     }
 
-    public async Task Initialize(string macAddress, string name, DataSavingOptions dataSavingOptions, List<string> bridges)
+    public async Task Initialize(
+        string macAddress,
+        string name,
+        DataSavingOptions dataSavingOptions,
+        List<string> bridges)
     {
         if (macAddress != this.GetPrimaryKeyString())
         {
@@ -198,7 +203,9 @@ public class RuuviTagGrain : Grain, IRuuviTag
             }
             else
             {
-                _logger.LogWarning("{Identity}: Failed to push measurement, storing it to cache to try again later.", GetIdentity());
+                _logger.LogWarning(
+                    "{Identity}: Failed to push measurement, storing it to cache to try again later.",
+                    GetIdentity());
                 break;
             }
         }
@@ -284,7 +291,7 @@ public class RuuviTagGrain : Grain, IRuuviTag
         // Initialize first bucket
         if (_ruuviTagState.State.CurrentBucketStartTime == null)
         {
-            _ruuviTagState.State.CurrentBucketStartTime = GetBucketStartTime(measurements.Timestamp, bucketSize);
+            _ruuviTagState.State.CurrentBucketStartTime = measurements.Timestamp.GetAlignedBucketStartTime(bucketSize);
             _ruuviTagState.State.CurrentBucketMeasurements = [];
         }
 
@@ -302,8 +309,7 @@ public class RuuviTagGrain : Grain, IRuuviTag
             // Bucket expired - calculate average and store it
             if (_ruuviTagState.State.CurrentBucketMeasurements.Count > 0)
             {
-                var bucketAverage = CalculateAverageMeasurements(
-                    _ruuviTagState.State.CurrentBucketMeasurements,
+                var bucketAverage = _ruuviTagState.State.CurrentBucketMeasurements.CalculateAverageMeasurements(
                     _ruuviTagState.State.CurrentBucketStartTime.Value); // Use bucket start time as timestamp
 
                 _ruuviTagState.State.CachedMeasurements ??= [];
@@ -312,41 +318,12 @@ public class RuuviTagGrain : Grain, IRuuviTag
             }
 
             // Start new bucket
-            _ruuviTagState.State.CurrentBucketStartTime = GetBucketStartTime(measurements.Timestamp, bucketSize);
+            _ruuviTagState.State.CurrentBucketStartTime = measurements.Timestamp.GetAlignedBucketStartTime(bucketSize);
             _ruuviTagState.State.CurrentBucketMeasurements = [];
         }
 
         // Add measurement to current bucket
         _ruuviTagState.State.CurrentBucketMeasurements.Add(measurements);
-    }
-
-    // Align bucket start times to fixed intervals
-    private static DateTime GetBucketStartTime(DateTime timestamp, TimeSpan bucketSize)
-    {
-        var ticks = timestamp.Ticks / bucketSize.Ticks;
-        return new DateTime(ticks * bucketSize.Ticks, timestamp.Kind);
-    }
-
-    private static MeasurementDTO CalculateAverageMeasurements(List<MeasurementDTO> measurements, DateTime timestamp)
-    {
-        if (measurements == null || measurements.Count == 0)
-        {
-            return null;
-        }
-
-        var averageMeasurements = new MeasurementDTO
-        {
-            BatteryVoltage = measurements.Last().BatteryVoltage,
-            Humidity = measurements.Select(m => m.Humidity).Average(),
-            Pressure = measurements.Select(m => m.Pressure).Average(),
-            Temperature = measurements.Select(m => m.Temperature).Average(),
-            RSSI = (short)measurements.Select(m => (int)m.RSSI).Average(),
-            Timestamp = timestamp,
-            SequenceNumber = measurements.Last().SequenceNumber,
-            MovementCounter = measurements.Last().MovementCounter
-        };
-
-        return averageMeasurements;
     }
 
     private bool TryParseMeasurements(byte[] data, bool discardInvalidValues, out MeasurementDTO measurements)

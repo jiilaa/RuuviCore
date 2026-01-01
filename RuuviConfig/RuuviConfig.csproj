@@ -5,9 +5,9 @@
     <TargetFramework>net10.0</TargetFramework>
     <AssemblyName>ruuviconfig</AssemblyName>
     <RootNamespace>net.jommy.RuuviCore</RootNamespace>
-    <PackageVersion>2.0.0</PackageVersion>
-    <AssemblyVersion>2.0.0</AssemblyVersion>
-    <FileVersion>2.0.0</FileVersion>
+    <PackageVersion>2.1.0</PackageVersion>
+    <AssemblyVersion>2.2.0</AssemblyVersion>
+    <FileVersion>2.2.0</FileVersion>
     <Authors>Jomi Laakkonen</Authors>
   </PropertyGroup>
 

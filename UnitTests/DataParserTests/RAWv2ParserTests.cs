@@ -1,8 +1,9 @@
 using System;
 using System.IO;
 using AwesomeAssertions;
-using net.jommy.RuuviCore.Grains.DataParsers;
 using net.jommy.RuuviCore.Interfaces;
+using net.jommy.RuuviCore.Protocol.DataParsers;
+
 using NUnit.Framework;
 
 namespace UnitTests.DataParserTests;
@@ -90,7 +91,7 @@ public class RAWv2ParserTests
         measurements.Should().BeNull();
         valid.Should().BeFalse();
     }
-        
+
     [Test]
     public void Parser_WithMinimumValues_ReturnsCorrectMeasurements()
     {
@@ -111,7 +112,7 @@ public class RAWv2ParserTests
 
         measurements.Should().BeEquivalentTo(expectedMeasurements);
     }
-        
+
     [Test]
     public void Parser_WithMinimumValuesAndValidationOn_ReturnsFalse()
     {

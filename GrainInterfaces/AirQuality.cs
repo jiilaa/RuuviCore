@@ -18,4 +18,9 @@ public class AirQuality
 
     [Orleans.Id(3)]
     public decimal? ParticulateMatter25 { get; set; }
+
+    public override string ToString()
+    {
+        return $"VOX:{VolatileOrganicCompoundsIndex}, NOX:{NitrogenOxidesIndex}, CO2:{CO2Concentration}, PM2.5:{ParticulateMatter25}";
+    }
 }

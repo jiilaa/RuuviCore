@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Text;
 
 namespace net.jommy.RuuviCore.Interfaces;
 
@@ -45,10 +46,47 @@ public class MeasurementDTO
 
     public override string ToString()
     {
+        var builder = new StringBuilder();
+        builder
+            .Append("[#")
+            .Append(SequenceNumber)
+            .Append(" @ ")
+            .Append(Timestamp)
+            .Append(". ")
+            .Append("Humidity:")
+            .Append(Humidity)
+            .Append(", Temperature:")
+            .Append(Temperature)
+            .Append(", Pressure:")
+            .Append(Pressure)
+            .Append(", Battery:")
+            .Append(BatteryVoltage);
         if (Acceleration != null)
         {
-            return $"[#{SequenceNumber} @ {Timestamp}. Humidity:{Humidity}, Temperature:{Temperature}, Pressure:{Pressure}, Battery:{BatteryVoltage}, Acceleration:{Acceleration}, RSSI:{RSSI}, Movement:{MovementCounter}";
+            builder
+                .Append(", Acceleration:")
+                .Append(Acceleration);
         }
-        return $"[#{SequenceNumber} @ {Timestamp}. Humidity:{Humidity}, Temperature:{Temperature}, Pressure:{Pressure}, Battery:{BatteryVoltage}, RSSI:{RSSI}, Movement:{MovementCounter}";
+        if (AirQuality != null)
+        {
+            builder
+                .Append(", AirQuality:")
+                .Append(AirQuality);
+        }
+
+        if (Luminosity.HasValue)
+        {
+            builder
+                .Append(", Luminosity:")
+                .Append(Luminosity.Value);
+        }
+
+        builder
+            .Append(", RSSI:")
+            .Append(RSSI)
+            .Append(", Movement:")
+            .Append(MovementCounter);
+
+        return builder.ToString();
     }
 }

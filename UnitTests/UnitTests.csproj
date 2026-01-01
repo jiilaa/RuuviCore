@@ -7,6 +7,7 @@
 
     <ItemGroup>
         <PackageReference Include="AwesomeAssertions" Version="9.3.0" />
+        <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.0.1" />
         <PackageReference Include="Microsoft.Orleans.Sdk" Version="9.2.1" />
         <PackageReference Include="nunit" Version="4.4.0" />
         <PackageReference Include="NUnit3TestAdapter" Version="6.0.1" />
@@ -14,6 +15,7 @@
 
     <ItemGroup>
       <ProjectReference Include="..\Grains\Grains.csproj" />
+      <ProjectReference Include="..\Protocol\Protocol.csproj" />
     </ItemGroup>
 
 </Project>
