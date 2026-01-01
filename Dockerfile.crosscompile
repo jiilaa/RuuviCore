@@ -16,6 +16,7 @@ COPY GrainServices/*.csproj GrainServices/
 COPY Grains/*.csproj Grains/
 COPY RuuviConfig/*.csproj RuuviConfig/
 COPY RuuviCore/*.csproj RuuviCore/
+COPY Protocol/Protocol.csproj Protocol/
 COPY RuuviUI/*.csproj RuuviUI/
 
 # Restore dependencies (will run on build platform, not target)

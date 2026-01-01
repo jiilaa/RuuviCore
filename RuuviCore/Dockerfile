@@ -9,6 +9,7 @@ COPY ["FileStorageProvider/FileStorageProvider.csproj", "FileStorageProvider/"]
 COPY ["GrainInterfaces/GrainInterfaces.csproj", "GrainInterfaces/"]
 COPY ["GrainServices/GrainServices.csproj", "GrainServices/"]
 COPY ["Grains/Grains.csproj", "Grains/"]
+COPY ["Protocol/Protocol.csproj", "Protocol/"]
 COPY ["RuuviUI/RuuviUI.csproj", "RuuviUI/"]
 
 # Restore dependencies as a separate layer
